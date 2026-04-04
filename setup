@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# fstack setup — Install skills, rules, and agents via symlinks
+# =============================================================================
+
+FSTACK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+RESET='\033[0m'
+
+# Defaults
+MODE="global"
+UNINSTALL=false
+DRY_RUN=false
+FORCE=false
+FILTER_CATEGORIES=""
+FILTER_SKILLS=""
+
+# Counters
+SKILLS_COUNT=0
+RULES_COUNT=0
+AGENTS_COUNT=0
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+info()    { printf "${GREEN}✓${RESET} %s\n" "$1"; }
+warn()    { printf "${YELLOW}!${RESET} %s\n" "$1"; }
+error()   { printf "${RED}✗${RESET} %s\n" "$1"; }
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Install fstack skills, rules, and agents as symlinks.
+
+Options:
+  --global           Install to ~/.claude/ (default)
+  --local            Install to ./.claude/ (project-local)
+  --uninstall        Remove fstack symlinks
+  --categories LIST  Comma-separated category filter (e.g., review,test)
+  --skills LIST      Comma-separated skill name filter (e.g., review-pr,handover)
+  --dry-run          Show what would be done without making changes
+  --force            Overwrite existing files/links at target paths
+  -h, --help         Show this help message
+EOF
+  exit 0
+}
+
+# =============================================================================
+# Argument parsing
+# =============================================================================
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --global)      MODE="global"; shift ;;
+    --local)       MODE="local"; shift ;;
+    --uninstall)   UNINSTALL=true; shift ;;
+    --categories)  FILTER_CATEGORIES="$2"; shift 2 ;;
+    --skills)      FILTER_SKILLS="$2"; shift 2 ;;
+    --dry-run)     DRY_RUN=true; shift ;;
+    --force)       FORCE=true; shift ;;
+    -h|--help)     usage ;;
+    *)             error "Unknown option: $1"; usage ;;
+  esac
+done
+
+# =============================================================================
+# Target directory
+# =============================================================================
+
+if [[ "$MODE" == "global" ]]; then
+  TARGET_DIR="$HOME/.claude"
+else
+  TARGET_DIR="./.claude"
+fi
+
+# =============================================================================
+# Prerequisites
+# =============================================================================
+
+check_prerequisites() {
+  local missing=false
+
+  if ! command -v claude &>/dev/null; then
+    error "claude CLI is required but not found. Install: https://docs.anthropic.com/en/docs/claude-code"
+    missing=true
+  fi
+
+  if ! command -v git &>/dev/null; then
+    error "git is required but not found."
+    missing=true
+  fi
+
+  if ! command -v gh &>/dev/null; then
+    warn "gh (GitHub CLI) not found. Some skills may have limited functionality."
+  fi
+
+  if [[ "$missing" == true ]]; then
+    exit 1
+  fi
+}
+
+# =============================================================================
+# Symlink helpers
+# =============================================================================
+
+# Create a symlink, respecting --dry-run, --force, and collision detection
+create_link() {
+  local source="$1"
+  local target="$2"
+  local label="$3"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] ${label}: ${source} → ${target}"
+    return 0
+  fi
+
+  # Ensure parent directory exists
+  mkdir -p "$(dirname "$target")"
+
+  if [[ -e "$target" || -L "$target" ]]; then
+    # If it's already a fstack symlink, always overwrite
+    if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR"* ]]; then
+      rm "$target"
+    elif [[ "$FORCE" == true ]]; then
+      rm -rf "$target"
+    else
+      warn "Skipped (exists): ${target} — use --force to overwrite"
+      return 1
+    fi
+  fi
+
+  ln -s "$source" "$target"
+  info "${label}: ${target}"
+  return 0
+}
+
+# Remove a symlink if it points to fstack
+remove_link() {
+  local target="$1"
+  local label="$2"
+
+  if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR"* ]]; then
+    if [[ "$DRY_RUN" == true ]]; then
+      info "[dry-run] Remove ${label}: ${target}"
+    else
+      rm "$target"
+      info "Removed ${label}: ${target}"
+    fi
+  fi
+}
+
+# =============================================================================
+# Check if a skill matches filters
+# =============================================================================
+
+matches_filter() {
+  local skill_name="$1"
+  local category="$2"
+
+  # If no filters, everything matches
+  if [[ -z "$FILTER_CATEGORIES" && -z "$FILTER_SKILLS" ]]; then
+    return 0
+  fi
+
+  # Check category filter
+  if [[ -n "$FILTER_CATEGORIES" ]]; then
+    IFS=',' read -ra cats <<< "$FILTER_CATEGORIES"
+    for cat in "${cats[@]}"; do
+      if [[ "$category" == "$cat" ]]; then
+        return 0
+      fi
+    done
+  fi
+
+  # Check skill name filter
+  if [[ -n "$FILTER_SKILLS" ]]; then
+    IFS=',' read -ra skills <<< "$FILTER_SKILLS"
+    for s in "${skills[@]}"; do
+      if [[ "$skill_name" == "$s" ]]; then
+        return 0
+      fi
+    done
+  fi
+
+  return 1
+}
+
+# =============================================================================
+# Install
+# =============================================================================
+
+install_skills() {
+  local skills_src="${FSTACK_DIR}/skills"
+  local skills_target="${TARGET_DIR}/skills"
+
+  if [[ ! -d "$skills_src" ]]; then
+    warn "No skills directory found at ${skills_src}"
+    return
+  fi
+
+  # Find all SKILL.md files — each directory containing one is a skill
+  while IFS= read -r skill_file; do
+    local skill_dir
+    skill_dir="$(dirname "$skill_file")"
+    local skill_name
+    skill_name="$(basename "$skill_dir")"
+
+    # Category is the parent of the skill directory
+    # e.g., skills/core/handover/SKILL.md → category=core
+    local relative
+    relative="${skill_dir#"$skills_src"/}"
+    local category
+    category="$(echo "$relative" | cut -d'/' -f1)"
+
+    if ! matches_filter "$skill_name" "$category"; then
+      continue
+    fi
+
+    # Flat展開: skills/core/handover/ → TARGET/skills/handover
+    if create_link "$skill_dir" "${skills_target}/${skill_name}" "Skill [${category}/${skill_name}]"; then
+      SKILLS_COUNT=$((SKILLS_COUNT + 1))
+    fi
+  done < <(find "$skills_src" -name "SKILL.md" -type f 2>/dev/null)
+}
+
+install_rules() {
+  local rules_src="${FSTACK_DIR}/rules"
+  local rules_target="${TARGET_DIR}/rules"
+
+  if [[ ! -d "$rules_src" ]]; then
+    warn "No rules directory found at ${rules_src}"
+    return
+  fi
+
+  for rule_file in "${rules_src}"/*.md; do
+    [[ -f "$rule_file" ]] || continue
+    local rule_name
+    rule_name="$(basename "$rule_file")"
+    local target_name="fstack-${rule_name}"
+
+    if create_link "$rule_file" "${rules_target}/${target_name}" "Rule [${rule_name}]"; then
+      RULES_COUNT=$((RULES_COUNT + 1))
+    fi
+  done
+}
+
+install_agents() {
+  local agents_src="${FSTACK_DIR}/agents"
+  local agents_target="${TARGET_DIR}/agents"
+
+  if [[ ! -d "$agents_src" ]]; then
+    warn "No agents directory found at ${agents_src}"
+    return
+  fi
+
+  for agent_file in "${agents_src}"/*.md; do
+    [[ -f "$agent_file" ]] || continue
+    local agent_name
+    agent_name="$(basename "$agent_file")"
+
+    if create_link "$agent_file" "${agents_target}/${agent_name}" "Agent [${agent_name}]"; then
+      AGENTS_COUNT=$((AGENTS_COUNT + 1))
+    fi
+  done
+}
+
+# =============================================================================
+# Uninstall
+# =============================================================================
+
+uninstall_all() {
+  echo "Removing fstack symlinks from ${TARGET_DIR}..."
+
+  # Skills
+  if [[ -d "${TARGET_DIR}/skills" ]]; then
+    for item in "${TARGET_DIR}/skills"/*; do
+      [[ -e "$item" || -L "$item" ]] || continue
+      remove_link "$item" "Skill"
+    done
+  fi
+
+  # Rules (fstack- prefixed)
+  if [[ -d "${TARGET_DIR}/rules" ]]; then
+    for item in "${TARGET_DIR}/rules"/fstack-*; do
+      [[ -e "$item" || -L "$item" ]] || continue
+      remove_link "$item" "Rule"
+    done
+  fi
+
+  # Agents
+  if [[ -d "${TARGET_DIR}/agents" ]]; then
+    for item in "${TARGET_DIR}/agents"/*; do
+      [[ -e "$item" || -L "$item" ]] || continue
+      remove_link "$item" "Agent"
+    done
+  fi
+
+  echo ""
+  info "fstack uninstalled from ${TARGET_DIR}"
+}
+
+# =============================================================================
+# Main
+# =============================================================================
+
+main() {
+  check_prerequisites
+
+  if [[ "$UNINSTALL" == true ]]; then
+    uninstall_all
+    exit 0
+  fi
+
+  echo "Installing fstack to ${TARGET_DIR}..."
+  echo ""
+
+  install_skills
+  install_rules
+  install_agents
+
+  echo ""
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] No changes were made."
+  else
+    cat <<EOF
+
+$(printf "${GREEN}✓${RESET}") fstack installed successfully!
+  Skills: ${SKILLS_COUNT} installed to ${TARGET_DIR}/skills/
+  Rules:  ${RULES_COUNT} installed to ${TARGET_DIR}/rules/
+  Agents: ${AGENTS_COUNT} installed to ${TARGET_DIR}/agents/
+
+  Run 'claude' and try: /review-pr, /handover, /orchestra-of-agents
+EOF
+  fi
+}
+
+main

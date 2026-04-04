@@ -1,0 +1,44 @@
+# プロジェクトガイドライン
+
+## コアワークフロー
+- **理解 → 計画 → 実装 → 検証** のサイクルを徹底
+- 実装前に既存コードとアーキテクチャを理解する
+- 変更の影響範囲を事前に評価する
+- テスト駆動開発を優先する
+
+## Code Intelligence
+
+コードナビゲーションには Grep/Read より LSP を優先:
+- `workspaceSymbol` — 定義の検索
+- `findReferences` — 全参照箇所の確認
+- `goToDefinition` / `goToImplementation` — ソースへジャンプ
+- `hover` — ファイルを開かずに型情報を確認
+
+LSP が利用できない場合やテキスト検索にのみ Grep を使用する。
+コードの編集後は LSP の診断を確認し、エラーがあれば先に修正する。
+
+## コンテキスト管理
+- コンテキスト使用率 65% 付近で `/handover` を実行し、セッション継続性を確保
+- 検索・解析タスクはサブエージェントに委譲する
+- 週次で `/crystallize` を実行し、ナレッジを蒸留する
+
+## ナレッジベース
+
+`~/.claude/knowledge/` にナレッジを蓄積（`/crystallize` で管理）:
+- `user-profile.md` — 役割・スキル・好み
+- `work-patterns.md` — 繰り返すパターン・学び
+- `tech-decisions.md` — 技術選定とその理由
+
+## テスト
+- TDD: RED → GREEN → REFACTOR
+- 失敗するテストを先に書き、最小限の実装で通し、リファクタリング
+- `/spec-driven-test` で仕様駆動テストを生成
+
+## コーディングスタイル
+
+<!-- プロジェクト固有のスタイルをここに追記 -->
+<!-- 例:
+- 言語: TypeScript strict mode
+- フォーマッター: Prettier（デフォルト設定）
+- リンター: ESLint（recommended ルール）
+-->
