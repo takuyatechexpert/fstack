@@ -25,6 +25,13 @@ FILTER_SKILLS=""
 SKILLS_COUNT=0
 RULES_COUNT=0
 AGENTS_COUNT=0
+CLAUDE_MD_ACTION=""
+
+# CLAUDE.md thresholds
+CLAUDE_MD_WARN_LINES=200
+CLAUDE_MD_WARN_BYTES=30000
+CLAUDE_MD_CRITICAL_LINES=300
+CLAUDE_MD_CRITICAL_BYTES=40000
 
 # =============================================================================
 # Helpers
@@ -273,6 +280,324 @@ install_agents() {
 }
 
 # =============================================================================
+# CLAUDE.md
+# =============================================================================
+
+FSTACK_MARKER_START="<!-- fstack:start"
+FSTACK_MARKER_END="<!-- fstack:end -->"
+
+# Estimate token count (rough: bytes / 3 for mixed Japanese/English markdown)
+estimate_tokens() {
+  local file="$1"
+  local bytes
+  bytes=$(wc -c < "$file" | tr -d ' ')
+  echo $(( bytes / 3 ))
+}
+
+# Check CLAUDE.md size and warn if approaching limits
+check_claude_md_size() {
+  local file="$1"
+  local lines bytes tokens
+
+  lines=$(wc -l < "$file" | tr -d ' ')
+  bytes=$(wc -c < "$file" | tr -d ' ')
+  tokens=$(estimate_tokens "$file")
+
+  if [[ "$lines" -ge "$CLAUDE_MD_CRITICAL_LINES" ]] || [[ "$bytes" -ge "$CLAUDE_MD_CRITICAL_BYTES" ]]; then
+    echo ""
+    error "CLAUDE.md が上限に近づいています！"
+    printf "  行数: %d / %d  |  サイズ: %d bytes / %d bytes  |  推定トークン: ~%d\n" \
+      "$lines" "$CLAUDE_MD_CRITICAL_LINES" "$bytes" "$CLAUDE_MD_CRITICAL_BYTES" "$tokens"
+    warn "Claude Code は 40KB 超で警告を出します。ルールは ~/.claude/rules/ への分割を検討してください。"
+    echo ""
+    return 1
+  elif [[ "$lines" -ge "$CLAUDE_MD_WARN_LINES" ]] || [[ "$bytes" -ge "$CLAUDE_MD_WARN_BYTES" ]]; then
+    echo ""
+    warn "CLAUDE.md が大きくなっています"
+    printf "  行数: %d / %d  |  サイズ: %d bytes / %d bytes  |  推定トークン: ~%d\n" \
+      "$lines" "$CLAUDE_MD_CRITICAL_LINES" "$bytes" "$CLAUDE_MD_CRITICAL_BYTES" "$tokens"
+    echo ""
+  else
+    printf "  CLAUDE.md: %d 行 / ~%d tokens — OK\n" "$lines" "$tokens"
+  fi
+  return 0
+}
+
+# Prompt user for CLAUDE.md action
+prompt_claude_md_action() {
+  local target_file="$1"
+
+  if [[ ! -e "$target_file" ]]; then
+    echo "CLAUDE.md が見つかりません。テンプレートから作成します。"
+    CLAUDE_MD_ACTION="create"
+    return
+  fi
+
+  echo ""
+  echo "既存の CLAUDE.md が見つかりました: ${target_file}"
+  check_claude_md_size "$target_file" || true
+  echo ""
+  echo "fstack のガイドラインをどうしますか？"
+  echo "  1) スキップ — 何もしない"
+  echo "  2) マージ  — fstack ブロックを追加/更新（既存の内容は保持）"
+  echo "  3) 上書き  — テンプレートで置き換え"
+  echo ""
+
+  while true; do
+    printf "選択してください [1/2/3] (default: 1): "
+    read -r choice
+    case "${choice:-1}" in
+      1) CLAUDE_MD_ACTION="skip"; break ;;
+      2) CLAUDE_MD_ACTION="merge"; break ;;
+      3) CLAUDE_MD_ACTION="overwrite"; break ;;
+      *) echo "1, 2, または 3 を入力してください" ;;
+    esac
+  done
+}
+
+# Merge fstack block into existing CLAUDE.md
+merge_fstack_block() {
+  local target_file="$1"
+  local template_file="$2"
+  local tmp_file
+
+  tmp_file=$(mktemp)
+
+  if grep -q "$FSTACK_MARKER_START" "$target_file" 2>/dev/null; then
+    # Replace existing fstack block
+    awk -v start="$FSTACK_MARKER_START" -v end="$FSTACK_MARKER_END" -v tpl="$template_file" '
+      $0 ~ start { skip=1; while ((getline line < tpl) > 0) print line; next }
+      $0 ~ end   { skip=0; next }
+      !skip       { print }
+    ' "$target_file" > "$tmp_file"
+    mv "$tmp_file" "$target_file"
+    info "CLAUDE.md: fstack ブロックを更新しました"
+  else
+    # Append fstack block
+    printf "\n" >> "$target_file"
+    cat "$template_file" >> "$target_file"
+    info "CLAUDE.md: fstack ブロックを追加しました"
+  fi
+}
+
+install_claude_md() {
+  local template="${FSTACK_DIR}/templates/CLAUDE.md.template"
+  local target_file="${TARGET_DIR}/CLAUDE.md"
+
+  # Global mode → ~/.claude/CLAUDE.md, Local mode → ./.claude/CLAUDE.md
+  # But CLAUDE.md is typically at project root, not inside .claude/
+  if [[ "$MODE" == "local" ]]; then
+    target_file="./CLAUDE.md"
+  fi
+
+  if [[ ! -f "$template" ]]; then
+    warn "CLAUDE.md テンプレートが見つかりません: ${template}"
+    return
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    if [[ -e "$target_file" ]]; then
+      info "[dry-run] CLAUDE.md: 既存ファイルあり — インタラクティブ選択（スキップ/マージ/上書き）"
+    else
+      info "[dry-run] CLAUDE.md: テンプレートから新規作成 → ${target_file}"
+    fi
+    return
+  fi
+
+  prompt_claude_md_action "$target_file"
+
+  case "$CLAUDE_MD_ACTION" in
+    skip)
+      info "CLAUDE.md: スキップしました"
+      ;;
+    create)
+      mkdir -p "$(dirname "$target_file")"
+      cp "$template" "$target_file"
+      info "CLAUDE.md: テンプレートから作成しました → ${target_file}"
+      ;;
+    merge)
+      merge_fstack_block "$target_file" "$template"
+      # Post-merge size check
+      if ! check_claude_md_size "$target_file"; then
+        warn "マージ後のサイズが上限に近いです。不要なセクションの整理を検討してください。"
+      fi
+      ;;
+    overwrite)
+      cp "$template" "$target_file"
+      info "CLAUDE.md: テンプレートで上書きしました → ${target_file}"
+      ;;
+  esac
+}
+
+# =============================================================================
+# Crystallize dependencies (knowledge base + log collection)
+# =============================================================================
+
+KNOWLEDGE_CREATED=false
+LOGS_CREATED=false
+
+# Prompt y/n with default
+ask_yn() {
+  local prompt="$1"
+  local default="${2:-y}"
+
+  if [[ "$default" == "y" ]]; then
+    printf "%s [Y/n]: " "$prompt"
+  else
+    printf "%s [y/N]: " "$prompt"
+  fi
+
+  read -r answer
+  answer="${answer:-$default}"
+  [[ "$answer" =~ ^[Yy] ]]
+}
+
+setup_knowledge_base() {
+  local knowledge_dir="${TARGET_DIR}/knowledge"
+  local template_dir="${FSTACK_DIR}/templates/knowledge"
+
+  if [[ ! -d "$template_dir" ]]; then
+    warn "ナレッジベーステンプレートが見つかりません: ${template_dir}"
+    return
+  fi
+
+  # Check if already exists
+  if [[ -d "$knowledge_dir" ]] && [[ -f "${knowledge_dir}/KNOWLEDGE.md" ]]; then
+    info "ナレッジベース: 既にセットアップ済み (${knowledge_dir})"
+    return
+  fi
+
+  echo ""
+  echo "┌─────────────────────────────────────────────────────────────┐"
+  echo "│ ナレッジベース                                             │"
+  echo "│ /crystallize で蒸留した知識を蓄積するディレクトリです。     │"
+  echo "│ セッション開始時に自動読み込みされ、Claude の応答品質が     │"
+  echo "│ 向上します。                                               │"
+  echo "│                                                            │"
+  echo "│ 作成先: ${knowledge_dir}/                                  │"
+  echo "│ ファイル: KNOWLEDGE.md, user-profile.md, work-patterns.md, │"
+  echo "│          collaboration.md, tech-decisions.md,              │"
+  echo "│          project-context.md                                │"
+  echo "└─────────────────────────────────────────────────────────────┘"
+
+  if ! ask_yn "ナレッジベースをセットアップしますか？"; then
+    info "ナレッジベース: スキップしました"
+    return
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] ナレッジベース: ${knowledge_dir}/ を作成"
+    return
+  fi
+
+  mkdir -p "$knowledge_dir"
+
+  for tmpl in "${template_dir}"/*.md; do
+    local filename
+    filename="$(basename "$tmpl")"
+    local target="${knowledge_dir}/${filename}"
+
+    if [[ -f "$target" ]]; then
+      warn "スキップ (既存): ${target}"
+    else
+      cp "$tmpl" "$target"
+      info "作成: ${target}"
+    fi
+  done
+
+  KNOWLEDGE_CREATED=true
+}
+
+setup_log_collection() {
+  local logs_dir="${TARGET_DIR}/logs"
+  local settings_file="${TARGET_DIR}/settings.json"
+
+  # Check if already exists
+  if [[ -d "$logs_dir" ]] && [[ -f "$settings_file" ]] && grep -q "skills.log" "$settings_file" 2>/dev/null; then
+    info "ログ収集: 既にセットアップ済み (${logs_dir})"
+    return
+  fi
+
+  echo ""
+  echo "┌─────────────────────────────────────────────────────────────┐"
+  echo "│ ログ収集                                                   │"
+  echo "│ Claude Code の hooks でスキル使用ログを記録します。         │"
+  echo "│ /crystallize がログを分析してパターンを抽出します。         │"
+  echo "│                                                            │"
+  echo "│ ログ先: ${logs_dir}/                                       │"
+  echo "│ hooks:  settings.json に PostToolUse hook を追加            │"
+  echo "└─────────────────────────────────────────────────────────────┘"
+
+  if ! ask_yn "ログ収集をセットアップしますか？"; then
+    info "ログ収集: スキップしました"
+    return
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] ログ収集: ${logs_dir}/ を作成、settings.json に hooks を追加"
+    return
+  fi
+
+  # Create logs directory
+  mkdir -p "$logs_dir"
+  info "作成: ${logs_dir}/"
+
+  # Add hooks to settings.json
+  if [[ ! -f "$settings_file" ]]; then
+    # Create new settings.json with hooks
+    cat > "$settings_file" <<'SETTINGS_EOF'
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) ${TOOL_INPUT}\" >> ~/.claude/logs/skills.log"
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+    info "作成: ${settings_file} (hooks 設定)"
+  elif ! grep -q "skills.log" "$settings_file" 2>/dev/null; then
+    warn "settings.json は既に存在しますが、skills.log の hook がありません"
+    echo "  以下を手動で settings.json の hooks.PostToolUse に追加してください:"
+    echo ""
+    echo '    {'
+    echo '      "matcher": "Skill",'
+    echo '      "hooks": ['
+    echo '        {'
+    echo '          "type": "command",'
+    echo '          "command": "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) ${TOOL_INPUT}\" >> ~/.claude/logs/skills.log"'
+    echo '        }'
+    echo '      ]'
+    echo '    }'
+    echo ""
+  else
+    info "settings.json: skills.log hook は既に設定済み"
+  fi
+
+  LOGS_CREATED=true
+}
+
+setup_crystallize() {
+  # Only run in global mode — crystallize dependencies are user-global
+  if [[ "$MODE" != "global" ]]; then
+    return
+  fi
+
+  echo ""
+  echo "━━━ Crystallize セットアップ ━━━"
+
+  setup_knowledge_base
+  setup_log_collection
+}
+
+# =============================================================================
 # Uninstall
 # =============================================================================
 
@@ -303,6 +628,31 @@ uninstall_all() {
     done
   fi
 
+  # CLAUDE.md — remove fstack block if present
+  local claude_md="${TARGET_DIR}/CLAUDE.md"
+  if [[ "$MODE" == "local" ]]; then
+    claude_md="./CLAUDE.md"
+  fi
+
+  if [[ -f "$claude_md" ]] && grep -q "$FSTACK_MARKER_START" "$claude_md" 2>/dev/null; then
+    if [[ "$DRY_RUN" == true ]]; then
+      info "[dry-run] Remove fstack block from ${claude_md}"
+    else
+      local tmp_file
+      tmp_file=$(mktemp)
+      awk -v start="$FSTACK_MARKER_START" -v end="$FSTACK_MARKER_END" '
+        $0 ~ start { skip=1; next }
+        $0 ~ end   { skip=0; next }
+        !skip       { print }
+      ' "$claude_md" > "$tmp_file"
+      # Remove trailing blank lines left after block removal
+      sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$tmp_file" > "${tmp_file}.clean"
+      mv "${tmp_file}.clean" "$claude_md"
+      rm -f "$tmp_file"
+      info "Removed fstack block from ${claude_md}"
+    fi
+  fi
+
   echo ""
   info "fstack uninstalled from ${TARGET_DIR}"
 }
@@ -325,17 +675,41 @@ main() {
   install_skills
   install_rules
   install_agents
+  install_claude_md
+  setup_crystallize
 
   echo ""
   if [[ "$DRY_RUN" == true ]]; then
     info "[dry-run] No changes were made."
   else
+    # Build crystallize status line
+    local crystallize_status=""
+    if [[ "$MODE" == "global" ]]; then
+      if [[ "$KNOWLEDGE_CREATED" == true ]] && [[ "$LOGS_CREATED" == true ]]; then
+        crystallize_status="knowledge + logs created"
+      elif [[ "$KNOWLEDGE_CREATED" == true ]]; then
+        crystallize_status="knowledge created"
+      elif [[ "$LOGS_CREATED" == true ]]; then
+        crystallize_status="logs created"
+      else
+        crystallize_status="skipped or already set up"
+      fi
+    fi
+
     cat <<EOF
 
 $(printf "${GREEN}✓${RESET}") fstack installed successfully!
-  Skills: ${SKILLS_COUNT} installed to ${TARGET_DIR}/skills/
-  Rules:  ${RULES_COUNT} installed to ${TARGET_DIR}/rules/
-  Agents: ${AGENTS_COUNT} installed to ${TARGET_DIR}/agents/
+  Skills:      ${SKILLS_COUNT} installed to ${TARGET_DIR}/skills/
+  Rules:       ${RULES_COUNT} installed to ${TARGET_DIR}/rules/
+  Agents:      ${AGENTS_COUNT} installed to ${TARGET_DIR}/agents/
+  CLAUDE.md:   ${CLAUDE_MD_ACTION:-skipped}
+EOF
+
+    if [[ -n "$crystallize_status" ]]; then
+      echo "  Crystallize: ${crystallize_status}"
+    fi
+
+    cat <<EOF
 
   Run 'claude' and try: /review-pr, /handover, /orchestra-of-agents
 EOF
