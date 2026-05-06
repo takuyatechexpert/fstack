@@ -16,6 +16,22 @@
 - 新規機能: 必ずテストを先に書く
 - バグ修正: 再現テストを書いてから修正する
 
+## 検証手段（セルフ・ベリフィケーション）
+
+実装・編集後は対応する検証コマンドを実行し、結果を確認してから完了とする。
+タスク委任時はこの表から該当コマンドを受け入れ基準として明示する。
+
+| 言語・種別 | 典型的な検証コマンド |
+|---|---|
+| PHP | `composer test` / `vendor/bin/phpunit` → `vendor/bin/phpstan` or `vendor/bin/psalm` |
+| TypeScript / Node | `pnpm test` → `pnpm typecheck` → `pnpm lint`（npm/yarn 環境ではそれぞれ置換） |
+| Python | `pytest` → `ruff check` → `mypy`（プロジェクトの設定に従う） |
+| Go | `go test ./...` → `go vet ./...` |
+| Rust | `cargo test` → `cargo clippy` |
+| 共通 | 編集直後に LSP 診断を確認しエラーを解消 |
+
+利用するプロジェクトに応じて、表に行を追加して拡張してよい（例: Ruby `bundle exec rspec` → `rubocop`、Java `./gradlew test` → `./gradlew check` 等）。
+
 ## テストケース設計
 
 以下の観点でテストケースを網羅する：

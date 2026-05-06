@@ -11,3 +11,39 @@
 - 検索・コード解析など「汚れ仕事」はサブエージェントに委譲する
 - 冗長なツール出力を避ける（`--stat` や `--oneline` オプションを活用）
 - 不要なファイル読み込みを避ける（LSP を優先）
+
+## ツール使用方針
+
+- **並列実行を積極的に使う** — 独立した調査（複数ファイルの Read、複数シンボルの LSP 検索、複数の Grep）は単一メッセージ内で並列発行する
+- **サブエージェント委譲の判断基準**:
+  - 3件以上の検索・広域調査が必要 → `Explore` サブエージェント
+  - 独立した作業を並行で進めたい → 複数 `Agent` を単一メッセージで起動
+  - 単一ファイル・単一シンボルの確認 → 直接 Read/LSP（サブエージェントを使わない）
+- **委譲時のプロンプト構成** — 意図・制約・受け入れ基準・関連ファイル・検証手段の5点を最初のターンで揃える
+- **ツール結果が長大になる場合** — サブエージェントに委譲してメインコンテキストを保護する
+
+## Deferred Tools と ToolSearch
+
+Claude Opus 4.7 では一部ツールが **deferred**（schema 未読込）状態で提供される。
+セッションごとに初回利用前に `ToolSearch` で schema を取得する必要がある。
+
+### よく使う deferred tool
+
+| 用途 | tool 名 |
+|---|---|
+| タスク管理 | `TaskCreate` `TaskUpdate` `TaskList` |
+| 構造化質問 | `AskUserQuestion` |
+| Web取得 | `WebFetch` `WebSearch` |
+| LSP 全般 | `LSP` |
+| プラン管理 | `EnterPlanMode` `ExitPlanMode` |
+
+### ToolSearch の使い方
+
+- `ToolSearch(query: "select:TaskCreate,TaskUpdate")` — 名前指定
+- `ToolSearch(query: "+web fetch")` — キーワード検索
+
+### 取得タイミング
+
+- 投機的に全部取らない（context を消費する）
+- 必要になった時点で必要な分だけ取得
+- 同じセッション内で1度取得すれば再利用可能
