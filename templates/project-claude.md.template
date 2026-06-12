@@ -1,0 +1,66 @@
+# {プロジェクト名}
+
+## 概要
+
+{プロジェクトの説明 — 何をするか、誰のためか、なぜ存在するか}
+
+## 技術スタック
+
+- 言語: {例: TypeScript, Python, Go, PHP}
+- フレームワーク: {例: Next.js, Django, Laravel, Gin}
+- データベース: {例: PostgreSQL, MySQL, MongoDB}
+- インフラ: {例: AWS, Vercel, Docker}
+
+## アーキテクチャ
+
+{アーキテクチャパターン: MVC, クリーンアーキテクチャ, DDD, ヘキサゴナル等}
+
+### レイヤー構成
+
+<!-- クリーンアーキテクチャの例:
+- `domain/` — エンティティ、値オブジェクト、リポジトリインターフェース
+- `application/` — ユースケース、DTO
+- `infrastructure/` — データベース、外部API、フレームワークアダプタ
+- `presentation/` — コントローラ、ビュー、APIエンドポイント
+-->
+
+## ディレクトリ構成
+
+```
+{project-root}/
+├── src/           # ソースコード
+├── tests/         # テストファイル
+├── docs/          # ドキュメント
+└── ...
+```
+
+## テスト
+
+- フレームワーク: {例: Jest, PHPUnit, pytest, go test}
+- 実行: {例: `make test`, `npm test`}
+- カバレッジ目標: {例: 80%}
+- 方針: {例: TDD, ユニット + インテグレーション, 仕様駆動}
+
+## 開発コマンド
+
+- ビルド: {例: `make build`, `npm run build`}
+- リント: {例: `make lint`, `npm run lint`}
+- 開発サーバー: {例: `make dev`, `npm run dev`}
+- 型チェック: {例: `make typecheck`, `npx tsc --noEmit`}
+
+## 規約
+
+<!-- プロジェクト固有の規約:
+- ブランチ命名: feature/xxx, fix/xxx
+- コミット形式: feat: タイトル #123
+- PR ルール: 1 approve 必須
+- コードレビュー: /review-pr を使用
+-->
+
+## 備考
+
+<!-- AI アシスタントへの追加コンテキスト:
+- 既知の癖や技術的負債
+- 現在リファクタリング中の領域
+- 外部依存やAPI制約
+-->

@@ -1,0 +1,10 @@
+CLAUDE.md
+
+# プロジェクト内部用ドキュメント（計画書・メモ等）はバージョン管理しない
+project-docs/
+
+# hooks/lint のローカル override 設定（環境依存）
+hooks/lint/config.json
+
+# ローカル worktree（セッション作業用）
+.claude/worktrees/

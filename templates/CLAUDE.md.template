@@ -1,0 +1,62 @@
+<!-- fstack:start — このブロックは fstack が管理しています。手動編集は setup 実行時に上書きされます -->
+
+## コアワークフロー
+- **理解 → 計画 → 実装 → 検証** のサイクルを徹底
+- 実装前に既存コードとアーキテクチャを理解する
+- 変更の影響範囲を事前に評価する
+- テスト駆動開発を優先する
+- 大規模変更（5+ファイル・破壊的変更）は `EnterPlanMode` で計画立案フェーズに入る
+  詳細: `~/.claude/rules/fstack-plan-mode.md`
+
+## 効率化原則
+
+- **並列実行を最大化** — 独立したツール呼び出しは単一メッセージ内で並列発行する（複数 Read、複数 LSP 検索、複数 Grep）
+- **委譲できるものは委譲** — 3件以上の検索・広域調査はサブエージェント、設計分析は `architect` エージェント、並列実装は `/orchestra-of-agents`
+- **ツール出力を最小化** — `git log --oneline`, `git diff --stat` などの要約モードを優先
+
+詳細: `~/.claude/rules/fstack-context-management.md`
+
+## Code Intelligence
+
+コードナビゲーションには Grep/Read より LSP を優先:
+- `workspaceSymbol` — 定義の検索
+- `findReferences` — 全参照箇所の確認
+- `goToDefinition` / `goToImplementation` — ソースへジャンプ
+- `hover` — ファイルを開かずに型情報を確認
+
+LSP が利用できない場合やテキスト検索にのみ Grep を使用する。
+コードの編集後は LSP の診断を確認し、エラーがあれば先に修正する。
+
+LSP は deferred tool のため、初回利用前に `ToolSearch(query: "select:LSP")` で schema を取得する。
+他にも `TaskCreate`, `WebFetch`, `WebSearch`, `EnterPlanMode` 等が deferred。
+
+## コンテキスト管理
+- コンテキスト使用率 65% 付近で `/handover` を実行し、セッション継続性を確保
+- 検索・解析タスクはサブエージェントに委譲する
+- 週次で `/crystallize` を実行し、ナレッジを蒸留する
+
+## ナレッジベース
+
+`~/.claude/knowledge/` にナレッジを蓄積（`/crystallize` で管理）:
+- `user-profile.md` — 役割・スキル・好み
+- `work-patterns.md` — 繰り返すパターン・学び
+- `tech-decisions.md` — 技術選定とその理由
+
+## Auto Memory（4.7構造化メモリ）
+
+セッションを跨いで参照される構造化メモリ。Claude Code 純正機能が `~/.claude/projects/<cwd>/memory/` に保存・参照する:
+
+- **user**: 役割・好み・知識
+- **feedback**: ガイダンス（Why と How to apply 必須）
+- **project**: 進行中の作業・締切
+- **reference**: 外部システムへのポインタ
+
+`/crystallize` 実行時、繰り返すパターンを knowledge ベースへ昇華する。
+詳細: `~/.claude/rules/fstack-memory.md`
+
+## テスト
+- TDD: RED → GREEN → REFACTOR
+- 失敗するテストを先に書き、最小限の実装で通し、リファクタリング
+- `/spec-driven-test` で仕様駆動テストを生成
+
+<!-- fstack:end -->

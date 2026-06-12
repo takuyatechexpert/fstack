@@ -1,0 +1,4 @@
+{
+  "_comment": "プロジェクト別の lint コマンド override テンプレート。このファイルを config.json にコピーして使用する。path はリポジトリルートの絶対パス（~ 展開可）、commands は言語キー(js/php/python/rust) → シェルコマンド。commands は $ROOT で実行される。config.json は .gitignore 対象（環境依存のため）。",
+  "projects": []
+}
