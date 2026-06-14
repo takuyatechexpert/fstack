@@ -58,6 +58,7 @@ Claude Code 用スキルの作成・更新・改善を一貫してサポート�
    ```
    dotfiles 等で別管理している場合は実体パスに作成し、`~/.claude/skills/{skill-name}` がシンボリックリンクで指す形にする。
 2. SKILL.md を Write ツールで作成（配置先: `~/.claude/skills/{skill-name}/SKILL.md`）
+   - フロントマターの `model` / `effort` は `references/skill-standards.md` の「model / effort の判断軸」に従う（推論系は inherit、機械的定型は haiku/sonnet 固定、不要なピン留めは避ける）
 3. 必要に応じて `references/` や `assets/` を作成
 
 ### Phase 3.5: 構造セルフ検証

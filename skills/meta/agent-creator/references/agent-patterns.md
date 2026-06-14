@@ -4,9 +4,9 @@
 
 | パターン | 用途 | モデル | maxTurns目安 |
 |---------|------|--------|-------------|
-| A: 読み取り専用アナリスト | 設計分析、影響範囲調査、コードレビュー | sonnet | 15 |
-| B: 実装エージェント | 機能実装、バグ修正、リファクタリング | sonnet | 30 |
-| C: オーケストレーター | 大規模タスクの分割・並列実行・結果統合 | opus | 20 |
+| A: 読み取り専用アナリスト | 設計分析、影響範囲調査、コードレビュー | inherit | 15 |
+| B: 実装エージェント | 機能実装、バグ修正、リファクタリング | inherit | 30 |
+| C: オーケストレーター | 大規模タスクの分割・並列実行・結果統合 | inherit | 20 |
 | D: バックグラウンドワーカー | CI風チェック、静的解析、依存関係確認 | haiku | 10 |
 | E: メモリ付き学習エージェント | プロジェクト固有の知識蓄積・文脈判断 | sonnet | 20 |
 
@@ -22,10 +22,12 @@ name: {agent-name}
 description: "{目的を具体的に記述}。コードの変更は一切行わない。"
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Agent
-model: sonnet
+model: inherit
 maxTurns: 15
 ---
 ```
+
+> 分析系は深い推論が品質に直結するため `inherit`（セッションの最上位モデルに追従）。
 
 **本文テンプレート:**
 
@@ -71,11 +73,13 @@ maxTurns: 15
 name: {agent-name}
 description: "{対象領域}のコード実装を行うエージェント。{トリガー条件}。"
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: sonnet
+model: inherit
 maxTurns: 30
 isolation: worktree
 ---
 ```
+
+> 実装系も推論が品質に直結するため `inherit`。軽量・定型的な実装に限るなら `sonnet` 固定も可。
 
 **本文テンプレート:**
 
@@ -118,10 +122,12 @@ isolation: worktree
 name: {agent-name}
 description: "{目的}のために複数のサブエージェントを調整するオーケストレーターエージェント。"
 tools: Agent({sub-agent-1}, {sub-agent-2}), Read, Grep, Glob, Bash
-model: opus
+model: inherit
 maxTurns: 20
 ---
 ```
+
+> オーケストレーションは最も高度な推論を要するため `inherit`（旧 `opus` 固定から変更）。
 
 **本文テンプレート:**
 
@@ -169,6 +175,8 @@ background: true
 ---
 ```
 
+> 静的解析・定型チェックなど機械的処理は `haiku` 固定。上位モデルはオーバースペック。
+
 **本文テンプレート:**
 
 ```markdown
@@ -211,6 +219,8 @@ maxTurns: 20
 memory: project
 ---
 ```
+
+> メモリ蓄積・整理が中心で推論は軽量寄りのため `sonnet` 固定。深い文脈推論が品質に直結する学習エージェントなら `inherit` に上げる。
 
 **メモリスコープの選択:**
 
@@ -258,7 +268,7 @@ memory: project
 |-----------|-----|-----------|------|
 | `tools` | string/array | 親から継承 | 許可ツールリスト |
 | `disallowedTools` | string/array | なし | 禁止ツールリスト（`tools` より優先） |
-| `model` | string | `inherit` | `haiku` / `sonnet` / `opus` / フルID |
+| `model` | string | `inherit` | `haiku` / `sonnet` / `opus` / フルID。判断軸は下記「model 選定ポリシー」参照 |
 | `maxTurns` | integer | 無制限 | 最大ターン数（安全装置として設定推奨） |
 | `permissionMode` | string | 親から継承 | `default` / `acceptEdits` / `dontAsk` / `bypassPermissions` / `plan` |
 | `skills` | array | なし | プリロードするスキル名（親から継承されない） |
@@ -267,3 +277,15 @@ memory: project
 | `background` | boolean | `false` | バックグラウンド実行 |
 | `isolation` | string | なし | `worktree` で隔離実行 |
 | `hooks` | object | なし | ライフサイクルフック |
+
+### model 選定ポリシー
+
+特定モデルへのピン留めは最小限にする。
+
+- **推論系は inherit（model 行を書かない or `model: inherit`）**: 分析系・レビュー系・実装系・オーケストレーションなど深い推論が品質に直結するもの。セッションのモデル（最上位含む）に追従する。軽量・定型的な実装に限るなら `sonnet` 固定も可
+- **機械的処理は haiku/sonnet 固定**: 静的解析・依存確認・定型チェックなど。上位モデルはオーバースペック
+- **採点・評価系はモデル固定を維持**: ベンチマーク比較可能性のため。採点者のモデルを変えると過去結果と比較できなくなる
+
+上のパターン例の `model` 値は具体的なデフォルトとして置いている（A/B/C は inherit、D は haiku、E は sonnet）。要件に応じて読み替えてよい。
+
+**ピン留めのリスク:** 指定モデルが利用プランで使えない場合、フォールバックせずエラーになる可能性がある（`fallbackModel` チェーンは可用性エラー専用で、無効モデル指定時の挙動は保証されない）。最上位モデルを活かしたい用途では inherit を優先する。

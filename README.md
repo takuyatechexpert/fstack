@@ -46,6 +46,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | git-workflow | コミットメッセージ規約、ブランチ戦略、PR テンプレート、コンフリクト対応 |
 | testing | TDD サイクル、カバレッジ目標、検証手段、テストケース設計、モック方針 |
 | implementation-flow | 実装タスクの規模別スキル使い分け（solo-with-verifier / orchestra-of-agents）、単独実装の禁止と例外条件 |
+| work-discipline | バグ修正の3ステップ（現状修正→根本原因→再発防止）、横展開の徹底（grep で全箇所洗い出し）、変更前の確認（既存同種ファイル・既存コード検索・並行編集確認） |
 | security | シークレット管理、スキル開発時の認証情報ハンドリング、OWASP Top 10 |
 | context-management | セッション引き継ぎ、ツール使用方針（並列実行・委譲基準）、deferred tools / ToolSearch |
 | memory | Auto Memory（4.7構造化メモリ）の4種運用と crystallize との境界 |
@@ -95,12 +96,14 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 |---|---|
 | `check-debug-code.sh` | JS/TS の `console.log` / `debugger` 残存検出 |
 | `pre-commit-lint.sh` + `lint/` | `git commit` 時に多言語 lint を SRP 分離 dispatcher で実行（js/php/python/rust）。`lint/config.json` でプロジェクト別 override |
+| `check-implementation-routing.sh` | コードファイル編集前に実装オーケストレーション系スキルの起動痕跡を確認し、無ければ reminder（blocking しない・macOS 前提） |
 
 ### ログ系
 
 | Hook | 用途 |
 |---|---|
 | `skill-log.sh` | スキル使用ログを `~/.claude/logs/skills.log` に追記する簡易ユーティリティ |
+| `log-knowledge-read.sh` | `CLAUDE_KNOWLEDGE_DIR`（デフォルト `~/knowledge`）配下の Read を `~/.claude/logs/knowledge.log` に記録 |
 
 詳細・設定例は [hooks/README.md](hooks/README.md) を参照。
 
@@ -154,7 +157,7 @@ fstack のシンボリックリンクのみ削除します。既存の `~/.claud
 
 - [x] review-all-pending 追加
 - [x] meta カテゴリ新設（my-skill-creator / skill-auditor / agent-creator / review-hooks）
-- [x] 実戦投入済み hook 群を追加（bootstrap-env / pre-compact-handover / post-compact-warning / check-debug-code / pre-commit-lint / validate-file-write / mask-mcp-output / skill-log）
+- [x] 実戦投入済み hook 群を追加（bootstrap-env / pre-compact-handover / post-compact-warning / check-debug-code / pre-commit-lint / validate-file-write / mask-mcp-output / skill-log / check-implementation-routing / log-knowledge-read）
 - [ ] hook-digest 追加（依存スクリプトの汎用化要）
 - [ ] migrate, vuln-watch, slack の追加検討
 - [ ] fstack.json 設定対応

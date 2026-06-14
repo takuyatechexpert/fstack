@@ -30,12 +30,14 @@
 |---|---|---|
 | `check-debug-code.sh` | `PostToolUse` (Edit/Write) | JS/TS の `console.log` / `debugger` 残存検出 |
 | `pre-commit-lint.sh` + `lint/` | `PreToolUse` (Bash) | `git commit` 時に多言語 lint を dispatcher で実行。`lint/lint-{js,php,python,rust}.sh` の SRP 分離 + `lint/config.json` でプロジェクト別 override |
+| `check-implementation-routing.sh` | `PreToolUse` (Edit/Write/NotebookEdit) | コードファイル編集前に、直近30分以内に実装オーケストレーション系スキル（solo-with-verifier / orchestra-of-agents）の起動痕跡が `skills.log` にあるか確認し、無ければ stderr で reminder（blocking しない）。メタ系・設定系・ドキュメント系のパスは除外 |
 
 ### ログ系
 
 | ファイル | イベント | 用途 |
 |---|---|---|
 | `skill-log.sh` | スキルから手動呼び出し | スキル使用ログを `~/.claude/logs/skills.log` に追記する簡易ユーティリティ |
+| `log-knowledge-read.sh` | `PostToolUse` (Read) | ナレッジディレクトリ配下のファイル読み込みを `~/.claude/logs/knowledge.log` に記録。マッチ対象は環境変数 `CLAUDE_KNOWLEDGE_DIR`（デフォルト `~/knowledge`）で設定 |
 
 ## opt-in 手順
 
@@ -59,12 +61,14 @@ ln -s "$(pwd)/hooks/pre-compact-handover.sh"   ~/.claude/hooks/fstack-pre-compac
 ln -s "$(pwd)/hooks/post-compact-warning.sh"   ~/.claude/hooks/fstack-post-compact-warning.sh
 ln -s "$(pwd)/hooks/check-debug-code.sh"       ~/.claude/hooks/fstack-check-debug-code.sh
 ln -s "$(pwd)/hooks/pre-commit-lint.sh"        ~/.claude/hooks/fstack-pre-commit-lint.sh
+ln -s "$(pwd)/hooks/check-implementation-routing.sh" ~/.claude/hooks/fstack-check-implementation-routing.sh
+ln -s "$(pwd)/hooks/log-knowledge-read.sh"     ~/.claude/hooks/fstack-log-knowledge-read.sh
 chmod +x hooks/*.sh hooks/lint/*.sh
 ```
 
 ### 2. `~/.claude/settings.json` に追加
 
-#### セキュリティ + 圧縮系 + lint の wire-up 例
+#### セキュリティ + 圧縮系 + lint + コード品質・ログ系の wire-up 例
 
 ```json
 {
@@ -90,6 +94,12 @@ chmod +x hooks/*.sh hooks/lint/*.sh
         "hooks": [
           { "type": "command", "command": "~/.claude/hooks/fstack-validate-file-write.sh", "timeout": 5 }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/fstack-check-implementation-routing.sh", "timeout": 5 }
+        ]
       }
     ],
     "PostToolUse": [
@@ -97,6 +107,12 @@ chmod +x hooks/*.sh hooks/lint/*.sh
         "matcher": "Edit|Write",
         "hooks": [
           { "type": "command", "command": "~/.claude/hooks/fstack-check-debug-code.sh", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/fstack-log-knowledge-read.sh", "timeout": 5 }
         ]
       },
       {
@@ -167,6 +183,18 @@ INTERNAL_API_[A-Z0-9]{20,}
 - Linux で使う場合は `stat -c %Y` / `md5sum` への置換が必要
 - キャッシュ先: `~/.claude/cache/bootstrap/<md5(cwd)>.md`、24時間有効
 - 強制再生成: `bash hooks/bootstrap-env.sh --force < <(echo '{"cwd":"'$PWD'"}')`
+
+## check-implementation-routing.sh の注意点
+
+- macOS 前提（`date -j -f` で skills.log のタイムスタンプを epoch 変換する）。Linux で使う場合は `date -d` への置換が必要
+- `skills.log` が存在しない環境では何もせず正常終了する（reminder を出すには `skill-log.sh` 等でスキル起動を記録している前提）
+- blocking しない reminder のみ。極小スコープ（typo・1行修正）の編集では無視して続行可能
+
+## log-knowledge-read.sh の注意点
+
+- 記録対象パスは環境変数 `CLAUDE_KNOWLEDGE_DIR` で指定する（未設定時のデフォルトは `~/knowledge`）。自分のナレッジ置き場に合わせて設定する
+- 対象外パスの Read は何も記録せず正常終了する
+- ログ先: `~/.claude/logs/knowledge.log`（`[YYYY-MM-DD HH:MM:SS] [KNOWLEDGE] READ <basename>` 形式）
 
 ## カスタマイズ
 
