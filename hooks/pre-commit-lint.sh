@@ -6,26 +6,92 @@
 # プロジェクト別の override コマンドは hooks/lint/config.json で管理
 #
 # Hook 入力: PreToolUse(Bash) の JSON (stdin)
-# 出力: エラー時のみ {"continue":false,"stopReason":...} を stdout に吐いて exit 1
+# 出力: lint エラー時のみ permissionDecision:"deny" の JSON を stdout に吐いて exit 0
+#       （check-secret-patterns.sh と同形式。exit 0 でないと deny が Claude に届かない）
 # 非 git commit コマンドは即 exit 0
+#
+# 作業起点の解釈（既知の制限）: コマンド先頭の `cd <path> &&` と最初の `git -C <path>` のみ
+# 解釈する。サブシェル・変数展開・クォート付きパス等の複雑形は解釈せず .cwd 起点で続行する。
 
-HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+# symlink 運用でも lint/ を実体から解決するため、POSIX ポータブルな symlink 追跡ループで
+# 実体位置を求める（readlink -f 非依存。旧 macOS でも lint/ を正しく解決する）
+# 循環ガード: 最大40回で打ち切り（mask-mcp-output.sh の _guard と同形。M2）。
+# 上限到達・解決失敗は「解決失敗」としてサイレント no-op にせず後段の判定で exit 2 する
+_self="$0"
+_guard=0
+while [ -L "$_self" ]; do
+  _guard=$((_guard + 1))
+  if [ "$_guard" -gt 40 ]; then _self=""; break; fi
+  _dir=$(cd -P "$(dirname "$_self")" 2>/dev/null && pwd) || { _self=""; break; }
+  _link=$(readlink "$_self") || { _self=""; break; }
+  case "$_link" in
+    /*) _self="$_link" ;;
+    *)  _self="$_dir/$_link" ;;
+  esac
+done
+HOOKS_DIR=""
+if [ -n "$_self" ]; then
+  HOOKS_DIR=$(cd -P "$(dirname "$_self")" 2>/dev/null && pwd || printf '')
+fi
+if [ -z "$HOOKS_DIR" ]; then
+  echo "[pre-commit-lint] hook の実体位置を解決できません（symlink 循環の可能性）。安全のためコミットをブロックします。" >&2
+  exit 2
+fi
 LINT_DIR="$HOOKS_DIR/lint"
 CONFIG_FILE="$LINT_DIR/config.json"
 
+# jq 不在は fail-closed（PreToolUse のブロッキングエラー）
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[pre-commit-lint] jq が見つかりません。安全のためコミットをブロックします。" >&2
+  exit 2
+fi
+
 input=$(cat)
-cmd=$(echo "$input" | jq -r '.tool_input.command // ""')
-cwd=$(echo "$input" | jq -r '.cwd // ""')
+
+# JSON parse に失敗したら fail-closed
+if ! printf '%s' "$input" | jq empty >/dev/null 2>&1; then
+  echo "[pre-commit-lint] hook 入力の JSON 解析に失敗しました。安全のためブロックします。" >&2
+  exit 2
+fi
+
+cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
+cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
 
 # git commit 以外は即終了（settings.json の if フィルタで1次ガード、ここで2次ガード）
-if ! echo "$cmd" | grep -qE '(^|[[:space:]&;|])git[[:space:]]+(-[^[:space:]]*[[:space:]]+)*commit([[:space:]]|$)'; then
+# dash オプションに続く値トークン（-c user.name=x 等）も飛ばし、オプション挟みを検出する
+if ! printf '%s' "$cmd" | grep -qE '(^|[[:space:]&;|])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|$)'; then
   exit 0
 fi
 
-# cwd が取れない or git リポジトリでない場合は no-op
-[[ -z "$cwd" ]] && exit 0
-cd "$cwd" 2>/dev/null || exit 0
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+# 作業起点を決定（L6: 先頭 cd と最初の -C を解釈。複雑形は .cwd 起点で続行）
+origin="$cwd"
+read -ra _tok <<< "$cmd"
+if [ "${_tok[0]:-}" = "cd" ] && [ -n "${_tok[1]:-}" ]; then
+  case "${_tok[1]}" in
+    /*) origin="${_tok[1]}" ;;
+    *)  origin="${origin:+$origin/}${_tok[1]}" ;;
+  esac
+fi
+for ((i = 0; i < ${#_tok[@]}; i++)); do
+  if [ "${_tok[$i]}" = "-C" ] && [ -n "${_tok[$((i + 1))]:-}" ]; then
+    case "${_tok[$((i + 1))]}" in
+      /*) origin="${_tok[$((i + 1))]}" ;;
+      *)  origin="${origin:+$origin/}${_tok[$((i + 1))]}" ;;
+    esac
+    break
+  fi
+done
+
+# L6-1: commit を検出したのに作業ディレクトリ / git root が解決できなければ fail-closed。
+# 従来の exit 0 素通り（空 cwd 含む）を廃止し、サイレントに lint を飛ばさない
+if [ -z "$origin" ] || ! cd "$origin" 2>/dev/null; then
+  echo "[pre-commit-lint] 作業ディレクトリを解決できません。安全のためコミットをブロックします。" >&2
+  exit 2
+fi
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "[pre-commit-lint] git リポジトリのルートを解決できません。安全のためコミットをブロックします。" >&2
+  exit 2
+}
 
 # ステージ済みファイルを null 区切りで取得（ファイル名に空白等があっても安全）
 STAGED=()
@@ -34,6 +100,13 @@ while IFS= read -r -d '' f; do
 done < <(git -C "$ROOT" diff --cached --name-only --diff-filter=ACMR -z)
 
 [[ ${#STAGED[@]} -eq 0 ]] && exit 0
+
+# L5: symlink 実体解決に失敗する等で lint/ が見つからない場合、サイレント no-op（未 lint の
+# まま commit 通過）にせず fail-closed にする
+if [ ! -d "$LINT_DIR" ]; then
+  echo "[pre-commit-lint] lint ディレクトリを解決できません ($LINT_DIR)。安全のためコミットをブロックします。" >&2
+  exit 2
+fi
 
 # 言語別に振り分け（絶対パスで格納）
 JS_FILES=()
@@ -96,8 +169,14 @@ run_lang "rust"   "${RS_FILES[@]}"
 
 if (( ${#ERRORS[@]} > 0 )); then
   reason="Lint エラーがあります (${ERRORS[*]})。コミット前に修正してください。"
-  jq -n --arg reason "$reason" '{continue: false, stopReason: $reason}'
-  exit 1
+  jq -n --arg reason "$reason" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $reason
+    }
+  }'
+  exit 0
 fi
 
 exit 0

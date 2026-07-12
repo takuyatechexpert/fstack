@@ -3,7 +3,9 @@
 
 JQ=$(command -v jq || echo "/opt/homebrew/bin/jq")
 
-file=$(echo "$CLAUDE_TOOL_INPUT" | "$JQ" -r '.file_path // empty')
+# 入力は stdin の JSON（$CLAUDE_TOOL_INPUT は存在しない）
+INPUT=$(cat)
+file=$(echo "$INPUT" | "$JQ" -r '.tool_input.file_path // empty')
 
 # ファイルパスが空なら終了
 [ -z "$file" ] && exit 0
@@ -20,7 +22,12 @@ esac
 # デバッグコードの検出
 matches=$(grep -n -E 'console\.(log|debug|warn|error|info|trace)|debugger' "$file" 2>/dev/null)
 
+# PostToolUse は実行済みでブロック不可。警告を Claude に届けるには stderr + exit 2。
+# マッチ行の内容は出さず、ファイルパスと行番号リストのみを渡す（行内容の露出防止）
 if [ -n "$matches" ]; then
-  echo "WARNING: debug code found in $file"
-  echo "$matches"
+  lines=$(printf '%s\n' "$matches" | awk -F: 'NR>1{printf ", "} {printf "%s", $1}')
+  echo "WARNING: debug code found in $file (lines: $lines)" >&2
+  exit 2
 fi
+
+exit 0
