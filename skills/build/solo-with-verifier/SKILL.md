@@ -1,6 +1,6 @@
 ---
 name: solo-with-verifier
-description: Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、1〜3ファイル・1〜3タスクの小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったとき、またはコード変更を伴う依頼を受けたときに使用する。
+description: "Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、1〜3ファイル・1〜3タスクの小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったとき、またはコード変更を伴う依頼を受けたときに使用する。以下では起動しない: 5タスク以上・複数モジュール横断の中〜大規模実装（orchestra-of-agents）、実装着手前の設計・計画書化のみ（build-planner）、typo/1行修正/コメント変更のみの極小スコープ、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
 ---
 
 # solo-with-verifier
@@ -37,12 +37,14 @@ Implementer と Verifier の2エージェントを反復させ、小〜中規模
 | 観点 | 本スキル適用 | orchestra-of-agents へ昇格 |
 |---|---|---|
 | 変更ファイル数 | 1〜3 | 4以上 |
-| タスク数 | 1〜3 | 4以上 |
+| タスク数 | 1〜3 | 5以上（4タスクはグレーゾーン → 下記参照） |
 | 依存関係 | 単純（直列・独立） | Wave設計が必要 |
 | 影響範囲 | 単一モジュール内 | 複数モジュール横断 |
 | 設計判断 | 既存パターンに沿う | アーキテクチャ選択を要する |
 
-**いずれか1つでも右側に該当したら orchestra-of-agents を提案** し、ユーザーに切替を確認する。
+**いずれか1つでも右側に明確に該当したら orchestra-of-agents を提案** し、ユーザーに切替を確認する。
+
+**4タスクのグレーゾーン**: 粒度判定の SSOT である build-planner のルーブリックに従う。依存が直列なら本スキルの反復で吸収し、独立性が高く並列化が活きる/複数モジュール横断でレビューが要るなら orchestra-of-agents に倒す。
 
 #### Why: 軽量版は早期OK・脱線・テスト追従の3つのリスクがある。スコープが膨らんだ瞬間にそれらのリスクが顕在化するため、境界を明確にしておく。
 
@@ -91,7 +93,7 @@ RUNDIR=$(mktemp -d /tmp/solo-with-verifier/run.XXXXXX)
 
 ### Phase 3: Implementer 実行
 
-Task tool で `general-purpose` サブエージェントを spawn し、`references/implementer-prompt.md` のパスと **Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**を明示的に渡す（固定パスを前提にしない）。
+Agent tool で `general-purpose` サブエージェントを spawn し、`references/implementer-prompt.md` のパスと **Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**を明示的に渡す（固定パスを前提にしない）。
 
 **Implementer の責務:**
 1. TDD サイクル: テストを先に書いて **RED を確認** → 実装 → GREEN → REFACTOR
@@ -102,7 +104,7 @@ Task tool で `general-purpose` サブエージェントを spawn し、`referen
 
 ### Phase 4: Verifier 実行
 
-Task tool で `general-purpose` サブエージェントを別途 spawn し、`references/verifier-prompt.md` のパスと **Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**（受け入れ基準）＋Phase 3 の実装差分（変更ファイル一覧）を明示的に渡す（固定パスを前提にしない）。
+Agent tool で `general-purpose` サブエージェントを別途 spawn し、`references/verifier-prompt.md` のパスと **Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**（受け入れ基準）＋Phase 3 の実装差分（変更ファイル一覧）を明示的に渡す（固定パスを前提にしない）。
 
 **Verifier の責務（4観点）:**
 1. **仕様適合**: Phase 2 の受け入れ基準を満たしているか

@@ -1,7 +1,7 @@
 # Implementer プロンプト
 
 solo-with-verifier スキルの Implementer サブエージェントに渡すプロンプト。
-Task tool で `general-purpose` agent type を spawn し、以下を `prompt` に渡す。
+Agent tool で `general-purpose` agent type を spawn し、以下を `prompt` に渡す。
 
 ---
 

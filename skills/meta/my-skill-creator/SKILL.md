@@ -1,6 +1,6 @@
 ---
 name: my-skill-creator
-description: Claude Code用スキルの新規作成・既存スキル更新・テスト・説明文最適化を支援するガイドスキル。スキルのディレクトリ構成、SKILL.mdの書き方、eval実行、ベンチマーク、説明文の自動最適化まで一貫してサポートする。ユーザーが「スキル作成」「スキル作って」「skill-creator」「新しいスキル」「スキル更新」「スキルをテストしたい」「説明文を最適化したい」と言ったときに使用する。以下では起動しない: 既存スキルの健康診断・改善計画・肥大化対応・棚卸し・リファクタリング（skill-auditor が担当）、サブエージェント（.claude/agents/*.md）の作成・更新・リント（agent-creator が担当）、スキル発見・他に使えるスキルがないかの確認（find-skills が担当）、スキル本体ではなく Claude Code の hooks 設定変更（review-hooks が担当）。
+description: "Claude Code用スキルの新規作成・既存スキル更新・テスト・説明文最適化を支援するガイドスキル。スキルのディレクトリ構成、SKILL.mdの書き方、eval実行、ベンチマーク、説明文の自動最適化まで一貫してサポートする。ユーザーが「スキル作成」「スキル作って」「skill-creator」「新しいスキル」「スキル更新」「スキルをテストしたい」「説明文を最適化したい」と言ったときに使用する。以下では起動しない: 既存スキルの健康診断・改善計画・肥大化対応・棚卸し・リファクタリング（skill-auditor が担当）、サブエージェント（.claude/agents/*.md）の作成・更新・リント（agent-creator が担当）、スキル発見・他に使えるスキルがないかの確認（find-skills が担当）、スキル本体ではなく Claude Code の hooks 設定変更（review-hooks が担当）。"
 ---
 
 # Skill Creator
@@ -89,6 +89,8 @@ PASS 条件:
 
 Phase 1 で「eval あり」と判定されたスキルは、Phase 4 冒頭で `references/eval-workflow.md` を Read してから以下を実施する。
 
+**前提チェック**: grader / eval-viewer / `run_loop.py` は公式 skill-creator プラグイン（`~/.claude/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator`）のスクリプト。未導入の環境ではこれらを起動できないため、着手前に導入有無を確認する。未導入なら公式プラグインの導入を案内し、導入しない場合は手動採点（各アサーションを1件ずつ目視で ○× 判定し `with_skill` の勝率を集計）にフォールバックする。
+
 1. `evals/evals.json` にテストプロンプトを 2〜3 件作成
 2. `with_skill` と `without_skill` を **同一ターン内で並列実行** する（Bash ツールを並列発行）
 3. アサーション設計 → grader で採点 → ベンチマーク集計 → eval-viewer でレビュー
@@ -101,9 +103,9 @@ Phase 1 で「eval あり」と判定されたスキルは、Phase 4 冒頭で `
 
 1. `should_trigger` / `should_not_trigger` クエリを 20 件作成（near-miss に重点）
 2. HTML テンプレートでユーザーに確認・編集させる
-3. `run_loop.py` で自動最適化（60/40 split + 拡張思考、最大 5 イテレーション）
-   - `ANTHROPIC_API_KEY` が環境にある場合: `run_loop.py` を実行
-   - `ANTHROPIC_API_KEY` が未設定の場合: 手動最適化に切り替え（`references/description-optimizer.md` の「APIキーがない場合の手動最適化」を Read して手順に従う）
+3. `run_loop.py` で自動最適化（60/40 split + 拡張思考、最大 5 イテレーション）。`run_loop.py` は公式 skill-creator プラグイン側のスクリプト
+   - 公式プラグイン導入済み かつ `ANTHROPIC_API_KEY` が環境にある場合: `run_loop.py` を実行
+   - 公式プラグイン未導入 または `ANTHROPIC_API_KEY` が未設定の場合: 手動最適化に切り替え（`references/description-optimizer.md` の「APIキーがない場合の手動最適化」を Read して手順に従う）
 4. `best_description` を SKILL.md frontmatter に適用し、Phase 3.5-2 の文字数・トリガー語チェックを再実行
 
 ### Phase 6: ログ記録

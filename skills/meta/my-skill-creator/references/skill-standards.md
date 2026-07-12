@@ -53,7 +53,7 @@ description: {日本語で機能説明 + トリガーフレーズ}
 
 | 種別 | 設定 | 対象 |
 |---|---|---|
-| 推論系 | 行を書かない（inherit） | 深い推論が品質に直結するもの。設計判断・コードレビュー・並列実装オーケストレーション・分析・ナレッジ蒸留（例: orchestra-of-agents, solo-with-verifier, review-pr, tech-lead, crystallize, skill-auditor） |
+| 推論系 | 行を書かない（inherit） | 深い推論が品質に直結するもの。設計判断・コードレビュー・並列実装オーケストレーション・分析・ナレッジ蒸留（例: orchestra-of-agents, solo-with-verifier, review-pr, crystallize, skill-auditor） |
 | 機械的定型処理 | `model: haiku` / `model: sonnet` 固定 | チャット投稿・定型申請・UI 自動操作・情報取得＆表示など。上位モデルはオーバースペック |
 | 採点・評価系 | モデル固定を維持 | ベンチマーク比較可能性のため。採点者のモデルを変えると過去結果と比較できず劣化検出が壊れる |
 

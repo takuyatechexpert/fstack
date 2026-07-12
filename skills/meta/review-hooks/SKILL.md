@@ -1,6 +1,6 @@
 ---
 name: review-hooks
-description: Claude Code の hooks 設定をレビュー・最適化するスキル。現在の設定確認、ログ動作チェック、未設定イベントの提案、settings.json の更新を行う。ユーザーが「hooks確認」「フック見直し」「review-hooks」「フック最適化」と言ったときに使用する。
+description: "Claude Code の hooks 設定をレビュー・最適化するスキル。現在の設定確認、ログ動作チェック、未設定イベントの提案、settings.json の更新を行う。ユーザーが「hooks確認」「フック見直し」「review-hooks」「フック最適化」と言ったときに使用する。以下では起動しない: スキル本体の作成・改善（my-skill-creator / skill-auditor）、hook が生成するログの集計。"
 ---
 
 # review-hooks スキル

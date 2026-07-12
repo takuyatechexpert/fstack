@@ -1,6 +1,6 @@
 ---
 name: pending-reviews
-description: GitHubで自分がレビュワーとしてアサインされており、かつapprovedが必要数に達していないPRを一覧取得するスキル。ユーザーが「レビュー待ちのPR」「自分がレビュワーのPR」「pending reviews」「レビューすべきPR」と言ったときに使用する。
+description: "GitHubで自分がレビュワーとしてアサインされており、かつapprovedが必要数に達していないPRを一覧取得するスキル。ユーザーが「レビュー待ちのPR」「自分がレビュワーのPR」「pending reviews」「レビューすべきPR」と言ったときに使用する。以下では起動しない: 実レビュー（review-pr）、一括自動レビュー（review-all-pending）。"
 model: haiku
 ---
 

@@ -1,7 +1,6 @@
 ---
 name: skill-auditor
-description: 既存スキルの健康診断と改善計画策定スキル。my-skill-creatorの基準と照合して改善余地を洗い出し、evalでベースライン取得→Step化→劣化検出しながら改善→design/棚卸しまでを一貫して進める。スキルが肥大化してきた時のチェックにも使える。ユーザーが「スキル監査」「skill-auditor」「〇〇スキルの改善」「このスキル肥大化してる」「スキルの健康診断」「スキルを見直したい」「スキル棚卸し」「スキルのリファクタリング」と言ったときに使用する。以下では起動しない: スキル新規作成（my-skill-creator領域）、スキル自体の使い方質問、単一ファイルの軽微な修正。
-model: opus
+description: "既存スキルの健康診断と改善計画策定スキル。my-skill-creatorの基準と照合して改善余地を洗い出し、evalでベースライン取得→Step化→劣化検出しながら改善→design/棚卸しまでを一貫して進める。スキルが肥大化してきた時のチェックにも使える。ユーザーが「スキル監査」「skill-auditor」「〇〇スキルの改善」「このスキル肥大化してる」「スキルの健康診断」「スキルを見直したい」「スキル棚卸し」「スキルのリファクタリング」と言ったときに使用する。以下では起動しない: スキル新規作成（my-skill-creator領域）、スキル自体の使い方質問、単一ファイルの軽微な修正。"
 ---
 
 # Skill Auditor
@@ -103,8 +102,9 @@ Step を **1 つずつ** 進める。各 Step で:
 **劣化検出時**: `pass_rate` が下がったら即ロールバックを提案する。
 
 **`run_loop.py`（description 自動最適化）の扱い**:
-- `ANTHROPIC_API_KEY` が環境にある場合: `python ~/.claude/skills/my-skill-creator/scripts/run_loop.py --skill {name} --iterations 5` を実行
-- 未設定の場合: 手動最適化に切り替え、`~/.claude/skills/my-skill-creator/references/description-optimizer.md` の「APIキーがない場合の手動最適化」を Read して手順に従う
+- 前提: `run_loop.py` は公式 skill-creator プラグイン（`~/.claude/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator`）側の eval 実行機構。導入されていない環境ではスキップし、下記の手動最適化に切り替える
+- 公式プラグイン導入済み かつ `ANTHROPIC_API_KEY` が環境にある場合: `SKILL_CREATOR` ディレクトリで `scripts/run_loop.py` を実行する（対象スキル名・イテレーション数などの引数は導入した公式 skill-creator プラグインの `--help` / README に従う）
+- 未導入 または APIキー未設定の場合: 手動最適化に切り替え、`~/.claude/skills/my-skill-creator/references/description-optimizer.md` の「APIキーがない場合の手動最適化」を Read して手順に従う
 
 ### Phase 4: クローズ
 

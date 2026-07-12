@@ -1,12 +1,14 @@
 ---
 name: orchestra-of-agents
-description: agent teamsを使った並列実装・レビューワークフロースキル。Wave方式で依存関係を考慮した並列実装、testerが仕様ベーステスト（/spec-driven-test）を作成、構成に応じたレビュー体制（標準:クロスレビュー+横断レビュー / 最小:ダイレクトレビュー+総合判断）で品質を担保する。ユーザーが「実装して」「〜を作って」「orchestra」「チーム実装」「orchestra-of-agents」「並列実装」「並列で実装」「エージェントチーム」「チームで作って」と言ったときに使用する。
+description: "agent teamsを使った並列実装・レビューワークフロースキル。Wave方式で依存関係を考慮した並列実装、testerが仕様ベーステスト（/spec-driven-test）を作成、構成に応じたレビュー体制（標準:クロスレビュー+横断レビュー / 最小:ダイレクトレビュー+総合判断）で品質を担保する。5タスク以上・複数モジュール横断・横断整合が必要な中〜大規模実装を対象とする。ユーザーが「実装して」「〜を作って」「orchestra」「チーム実装」「orchestra-of-agents」「並列実装」「並列で実装」「エージェントチーム」「チームで作って」と言ったときに使用する。以下では起動しない: 1〜3タスクの小〜中規模修正（solo-with-verifier）、実装着手前の設計のみ（build-planner）、単一ファイル修正・typo、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
 ---
 
 # orchestra-of-agents
 
 agent teams を活用した並列実装・テスト・レビューワークフロー。
 Wave 方式で依存関係を考慮しながら並列実装し、仕様ベーステストと構成に応じたレビュー体制で品質を担保する。
+
+> **前提（harness 適応）**: 本スキルおよび references（`standard-workflow.md` / `minimal-workflow.md`）が使う agent teams API 名（`TeamCreate` / `TeamDelete` 等）は、現行 Claude Code のツール一覧に存在しない場合がある。その場合は **name 付きの Agent spawn + `SendMessage` + Task 系ツール**（`TaskCreate` / `TaskUpdate` 等）に読み替えて運用する。チーム生成＝name 付き Agent の起動、チーム解体＝各エージェントへの `shutdown_request` 送信、として対応する。
 
 ## 参照ファイル
 
