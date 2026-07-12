@@ -12,7 +12,7 @@
 ## クイックスタート
 
 ```bash
-git clone https://github.com/your-org/fstack.git
+git clone https://github.com/YOUR_ORG/fstack.git
 cd fstack
 ./setup
 ```
@@ -29,6 +29,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | Review | pending-reviews | レビュー待ち PR の一覧取得 | `/pending-reviews` |
 | Review | review-all-pending | レビュー待ち PR を並列で一括レビュー、結果を `reviews/` に出力 | `/review-all-pending` |
 | Test | spec-driven-test | 仕様駆動テスト。対象の仕様分析 → テストケース設計 → 実装 | `/spec-driven-test` |
+| Build | build-planner | 実装着手前の設計・計画書作成・実装規模の粒度判定。後段の実装スキルへ引き渡し | `/build-planner` |
 | Build | orchestra-of-agents | 並列実装。agent teams による Wave 方式の実装・テスト・レビュー | `/orchestra-of-agents` |
 | Build | solo-with-verifier | 軽量実装。Implementer + Verifier の2エージェント反復で小〜中規模修正の品質を担保 | `/solo-with-verifier` |
 | Meta | my-skill-creator | スキル新規作成・更新・ベンチマーク・説明文最適化を一貫サポート | `/my-skill-creator` |

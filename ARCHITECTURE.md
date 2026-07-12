@@ -27,6 +27,10 @@ fstack/
 │   │   └── spec-driven-test/
 │   │       └── SKILL.md   # 仕様駆動テストスキル
 │   ├── build/
+│   │   ├── build-planner/
+│   │   │   ├── SKILL.md   # 実装着手前の設計・計画書作成・粒度判定スキル
+│   │   │   └── references/
+│   │   │       └── plan-template.md  # 計画書テンプレート
 │   │   ├── orchestra-of-agents/
 │   │   │   ├── SKILL.md   # 並列実装スキル
 │   │   │   └── references/
@@ -188,6 +192,8 @@ Claude Code がスキルディレクトリをフラットに期待するため�
 fstack/rules/design-principles.md → ~/.claude/rules/fstack-design-principles.md
 fstack/rules/testing.md           → ~/.claude/rules/fstack-testing.md
 ```
+
+なお、リポジトリ内のスキルプロンプトや docs が参照する素の `rules/xxx.md`（例: `rules/testing.md`）は、インストール後の `~/.claude/rules/fstack-xxx.md`（例: `fstack-testing.md`）に対応する。
 
 ルールを無効化するには、シンボリックリンクを削除するだけです。
 

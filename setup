@@ -343,6 +343,13 @@ prompt_claude_md_action() {
   echo "  3) 上書き  — テンプレートで置き換え"
   echo ""
 
+  # 非対話環境（パイプ/CI）では read が EOF で即死するためデフォルト（スキップ）に倒す
+  if [[ ! -t 0 ]]; then
+    warn "非対話環境のため CLAUDE.md はスキップします（対話実行時は選択可能）"
+    CLAUDE_MD_ACTION="skip"
+    return
+  fi
+
   while true; do
     printf "選択してください [1/2/3] (default: 1): "
     read -r choice
@@ -440,6 +447,13 @@ LOGS_CREATED=false
 ask_yn() {
   local prompt="$1"
   local default="${2:-y}"
+
+  # 非対話環境（パイプ/CI）では read が EOF で即死する。かつ無同意でのサイド・エフェクト
+  # （knowledge/logs 生成・settings.json への hook 追記）を避けるため、常にスキップ（no）に倒す
+  if [[ ! -t 0 ]]; then
+    warn "非対話環境のため「${prompt}」はスキップします（対話実行時に選択可能）"
+    return 1
+  fi
 
   if [[ "$default" == "y" ]]; then
     printf "%s [Y/n]: " "$prompt"
