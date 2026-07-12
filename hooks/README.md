@@ -4,6 +4,8 @@
 
 `setup` スクリプトでは hook の自動インストールはしない。利用者が必要なものだけ選んで wire up する設計。
 
+例外として `skill-log.sh` のみ、`setup --global` の Crystallize セットアップ（ログ収集）を有効にしたときに `~/.claude/hooks/skill-log.sh` へリンクされる。`/crystallize` のログ導線として全 SKILL.md が参照するパスを実在させるため。
+
 ## 同梱フック
 
 ### セキュリティ系
@@ -11,10 +13,10 @@
 | ファイル | イベント | 用途 |
 |---|---|---|
 | `validate-bash.sh` | `PreToolUse` (Bash) | パイプ経由のシェル実行・eval・シークレット参照・curl 詳細トレース・set -x 等の危険パターンをブロック |
-| `check-secret-patterns.sh` | `PreToolUse` (Bash) | `git commit/push` 時に、プロジェクト直下の `.claude/secret-patterns.txt` で定義された正規表現にマッチする内容があればブロック |
+| `check-secret-patterns.sh` | `PreToolUse` (Bash) | `git commit/push` 時に、プロジェクト直下の `.claude/secret-patterns.txt` で定義された正規表現にマッチする内容があればブロック。スキャン対象は working tree でなく git の内容（commit=index `:0:file`／push=`HEAD` ツリー `HEAD:file`。**push でも全履歴は遡らない** — それは gitleaks 等の領域で本 hook の射程外）。deny 理由は `<file>:<line> (pattern #<n>)`（n はパターン定義の 1 始まり番号）のみで、マッチしたシークレット値も pattern 文字列もトランスクリプトに出力しない。`git` にオプションが挟まる形（`git -c x=y commit` 等）も検出し、コマンド先頭の `cd <path> &&` と最初の `git -C <path>` を作業起点として解釈する（サブシェル・変数展開等の複雑形は `.cwd` 起点で続行）。jq 不在・stdin JSON の parse 失敗・**commit/push を検出したのに作業ディレクトリ/git root が解決できない場合（空 CWD 含む）**は exit 2 で fail-closed（従来の exit 0 素通りは廃止） |
 | `validate-file-write.sh` | `PreToolUse` (Edit/Write) | `.env` / SSH 鍵 / 証明書 / settings.json / crontab 等の機密ファイル書き込みを deny/ask |
-| `mask-secrets.sh` | パイプ経由（補助） | API キー・トークン・JWT・AWS キー・OAuth 等のリテラル値を `[MASKED]` に置換 |
-| `mask-mcp-output.sh` | `PostToolUse` (MCP) | MCP ツール出力に混入したシークレットを LLM コンテキスト到達前にマスク |
+| `mask-secrets.sh` | パイプ経由（補助） | API キー・トークン・JWT・AWS キー・OAuth 等のリテラル値を `[MASKED]` に置換。JSON（`"key": "value"`）は引用符構造を保持して値だけを置換する |
+| `mask-mcp-output.sh` | `PostToolUse` (MCP) | MCP ツール出力に混入したシークレットを LLM コンテキスト到達前にマスク。fail-closed（マスカー不在時はレスポンスを秘匿） |
 
 ### コンテキスト管理系
 
@@ -28,8 +30,8 @@
 
 | ファイル | イベント | 用途 |
 |---|---|---|
-| `check-debug-code.sh` | `PostToolUse` (Edit/Write) | JS/TS の `console.log` / `debugger` 残存検出 |
-| `pre-commit-lint.sh` + `lint/` | `PreToolUse` (Bash) | `git commit` 時に多言語 lint を dispatcher で実行。`lint/lint-{js,php,python,rust}.sh` の SRP 分離 + `lint/config.json` でプロジェクト別 override |
+| `check-debug-code.sh` | `PostToolUse` (Edit/Write) | JS/TS の `console.log` / `debugger` 残存検出。検出時は stderr に警告 + exit 2 で Claude に通知（ブロックはしない）。警告は `WARNING: debug code found in <file> (lines: 3, 7)` の形式で、行番号のみを出し**マッチした行の内容は出さない** |
+| `pre-commit-lint.sh` + `lint/` | `PreToolUse` (Bash) | `git commit` 時に多言語 lint を dispatcher で実行。`lint/lint-{js,php,python,rust}.sh` の SRP 分離 + `lint/config.json` でプロジェクト別 override。lint 失敗時は `permissionDecision: "deny"` + exit 0 でコミットをブロック。symlink 経由で起動しても POSIX ポータブルな追跡ループで実体位置から `lint/` を解決する。作業起点は check-secret-patterns と同様に `cd <path> &&` / `git -C <path>` を解釈する。jq 不在・parse 失敗・**作業ディレクトリ/git root が解決できない場合**・**symlink 実体解決に失敗して `lint/` が見つからない場合**はいずれも exit 2 で fail-closed（サイレント no-op・exit 0 素通りは廃止） |
 | `check-implementation-routing.sh` | `PreToolUse` (Edit/Write/NotebookEdit) | コードファイル編集前に、直近30分以内に実装オーケストレーション系スキル（solo-with-verifier / orchestra-of-agents）の起動痕跡が `skills.log` にあるか確認し、無ければ stderr で reminder（blocking しない）。メタ系・設定系・ドキュメント系のパスは除外 |
 
 ### ログ系
@@ -65,6 +67,11 @@ ln -s "$(pwd)/hooks/check-implementation-routing.sh" ~/.claude/hooks/fstack-chec
 ln -s "$(pwd)/hooks/log-knowledge-read.sh"     ~/.claude/hooks/fstack-log-knowledge-read.sh
 chmod +x hooks/*.sh hooks/lint/*.sh
 ```
+
+Option B（symlink）でも次の hook は実体位置を基準に解決するため正しく動く:
+
+- `pre-commit-lint.sh` — symlink 経由で起動しても、POSIX ポータブルな symlink 追跡ループ（plain `readlink` + `cd -P`。`readlink -f` 非依存で旧 macOS でも動く）で実体を辿り、実体と同階層の `lint/` を見つける。循環 symlink はガードで検知し exit 2
+- `mask-mcp-output.sh` — 同じ symlink 追跡ループで実体位置から `mask-secrets.sh`（不在時は `fstack-mask-secrets.sh`）を解決する
 
 ### 2. `~/.claude/settings.json` に追加
 
@@ -195,6 +202,14 @@ INTERNAL_API_[A-Z0-9]{20,}
 - 記録対象パスは環境変数 `CLAUDE_KNOWLEDGE_DIR` で指定する（未設定時のデフォルトは `~/knowledge`）。自分のナレッジ置き場に合わせて設定する
 - 対象外パスの Read は何も記録せず正常終了する
 - ログ先: `~/.claude/logs/knowledge.log`（`[YYYY-MM-DD HH:MM:SS] [KNOWLEDGE] READ <basename>` 形式）
+
+## mask 系 hook の注意点
+
+- `mask-secrets.sh` は JSON とプレーンテキストの両方に対応する。JSON では `"key": "value"` の引用符構造を保持したまま値だけを `[MASKED]` に置換するため、マスク後も `jq empty` を通る。加えて、JSON 文字列内にシリアライズされた JSON（MCP の `content[].text` 標準形。`\"key\":\"value\"`）の **1 段ネスト**もマスクする（値内のエスケープシーケンスを含む値も終端までまとめて置換。2 段以上のネスト・値が単独バックスラッシュで終わる形は対象外）
+- `mask-mcp-output.sh` は自身の**実体位置**から `mask-secrets.sh` を解決する（POSIX ポータブルな symlink 追跡ループ。`readlink -f` 非依存）。直接参照・symlink・コピーのいずれの運用でも動く
+  - 探索は2段フォールバック: `<実体ディレクトリ>/mask-secrets.sh` → 不在なら `<実体ディレクトリ>/fstack-mask-secrets.sh`（Option B の `fstack-` プレフィックス付きコピー運用に対応）
+  - **全エラー経路で fail-closed**: payload の parse 失敗・masker 不在/異常終了・実体解決失敗・マスク後テキストが不正 JSON・最終 jq 失敗のいずれでも、素通しや部分マスクを渡さず固定秘匿メッセージ（`(reason: masker_missing|masker_failed|invalid_json|internal_error)`）に置換する。マスク前の元レスポンスは絶対に LLM へ返さない
+  - ログ（`[MCP_MASK]` / `[MCP_MASK_FALLBACK]`）は best-effort。`HOME` 未設定等でログ不能でも、マスク/秘匿出力の返却は継続する（ログ不能を fail-open にはしない）
 
 ## カスタマイズ
 

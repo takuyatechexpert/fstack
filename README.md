@@ -77,10 +77,10 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | Hook | 用途 |
 |---|---|
 | `validate-bash.sh` | Bash の危険パターン（パイプ経由のシェル実行・任意コード実行・curl 詳細トレース・set -x 等）をブロック |
-| `check-secret-patterns.sh` | `git commit/push` 時にプロジェクト直下の `.claude/secret-patterns.txt` で定義したパターンを検査 |
+| `check-secret-patterns.sh` | `git commit/push` 時にプロジェクト直下の `.claude/secret-patterns.txt` で定義したパターンを git の内容（commit=index／push=HEAD ツリー。全履歴は非対象）に対して検査。deny 理由は `<file>:<line> (pattern #<n>)` のみでシークレット値も pattern 文字列も出さない。jq 不在・parse 失敗・作業ディレクトリ/git root 解決不能（空 CWD 含む）時は exit 2 で fail-closed |
 | `validate-file-write.sh` | `.env` / SSH 鍵 / 証明書 / `settings.json` / crontab 等の機密ファイル書き込みを deny/ask |
-| `mask-secrets.sh` | API キー・トークン・JWT・AWS キー等のリテラル値を `[MASKED]` に置換（パイプ用ユーティリティ） |
-| `mask-mcp-output.sh` | MCP ツール出力に混入したシークレットを LLM コンテキスト到達前にマスク |
+| `mask-secrets.sh` | API キー・トークン・JWT・AWS キー等のリテラル値を `[MASKED]` に置換（パイプ用ユーティリティ・JSON 構造は保持） |
+| `mask-mcp-output.sh` | MCP ツール出力に混入したシークレットを LLM コンテキスト到達前にマスク（マスカー不在時は fail-closed でレスポンスを秘匿） |
 
 ### コンテキスト管理系
 
@@ -94,8 +94,8 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 
 | Hook | 用途 |
 |---|---|
-| `check-debug-code.sh` | JS/TS の `console.log` / `debugger` 残存検出 |
-| `pre-commit-lint.sh` + `lint/` | `git commit` 時に多言語 lint を SRP 分離 dispatcher で実行（js/php/python/rust）。`lint/config.json` でプロジェクト別 override |
+| `check-debug-code.sh` | JS/TS の `console.log` / `debugger` 残存検出（検出時は stderr 警告 + exit 2、ブロックはしない）。警告は行番号のみで行内容は出さない |
+| `pre-commit-lint.sh` + `lint/` | `git commit` 時に多言語 lint を SRP 分離 dispatcher で実行（js/php/python/rust）。`lint/config.json` でプロジェクト別 override。lint 失敗時は deny でブロック。jq 不在・parse 失敗・作業ディレクトリ/git root/`lint/` 解決不能時は exit 2 で fail-closed |
 | `check-implementation-routing.sh` | コードファイル編集前に実装オーケストレーション系スキルの起動痕跡を確認し、無ければ reminder（blocking しない・macOS 前提） |
 
 ### ログ系

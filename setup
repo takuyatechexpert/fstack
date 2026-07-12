@@ -513,7 +513,7 @@ setup_log_collection() {
   local settings_file="${TARGET_DIR}/settings.json"
 
   # Check if already exists
-  if [[ -d "$logs_dir" ]] && [[ -f "$settings_file" ]] && grep -q "skills.log" "$settings_file" 2>/dev/null; then
+  if [[ -d "$logs_dir" ]] && [[ -f "$settings_file" ]] && grep -q "skill-log" "$settings_file" 2>/dev/null; then
     info "ログ収集: 既にセットアップ済み (${logs_dir})"
     return
   fi
@@ -534,13 +534,46 @@ setup_log_collection() {
   fi
 
   if [[ "$DRY_RUN" == true ]]; then
-    info "[dry-run] ログ収集: ${logs_dir}/ を作成、settings.json に hooks を追加"
+    info "[dry-run] ログ収集: ${logs_dir}/ を作成、skill-log.sh を hooks/ にリンク、settings.json に hooks を追加"
     return
   fi
 
   # Create logs directory
   mkdir -p "$logs_dir"
   info "作成: ${logs_dir}/"
+
+  # skill-log.sh を hooks/ にリンク（全 SKILL.md が参照する ~/.claude/hooks/skill-log.sh を実在させる）
+  local skill_log_src="${FSTACK_DIR}/hooks/skill-log.sh"
+  local skill_log_target="${TARGET_DIR}/hooks/skill-log.sh"
+
+  # fstack 以外の実体が既にある場合は上書きせず、自動セットアップを中止して手動案内を出す
+  if [[ "$FORCE" != true ]] \
+     && { [[ -e "$skill_log_target" ]] || [[ -L "$skill_log_target" ]]; } \
+     && ! { [[ -L "$skill_log_target" ]] && [[ "$(readlink "$skill_log_target")" == "$FSTACK_DIR"* ]]; }; then
+    warn "既存の ${skill_log_target} は fstack 以外の実体です。ログ収集の自動セットアップを中止します。"
+    echo "  手動で対応してください（--force で上書きも可能）:"
+    echo "    1) 既存の skill-log.sh を退避し、${skill_log_src} を ${skill_log_target} に配置（symlink 推奨）"
+    echo "    2) settings.json の hooks.PostToolUse に以下を追加:"
+    echo ""
+    cat <<'MANUAL_EOF'
+    {
+      "matcher": "Skill",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "~/.claude/hooks/skill-log.sh \"$(jq -r '.tool_input.skill // \"unknown\"')\" START auto"
+        }
+      ]
+    }
+MANUAL_EOF
+    echo ""
+    return
+  fi
+
+  if ! create_link "$skill_log_src" "$skill_log_target" "Hook [skill-log.sh]"; then
+    warn "skill-log.sh のリンクに失敗しました。ログ収集の自動セットアップを中止します。"
+    return
+  fi
 
   # Add hooks to settings.json
   if [[ ! -f "$settings_file" ]]; then
@@ -554,7 +587,7 @@ setup_log_collection() {
         "hooks": [
           {
             "type": "command",
-            "command": "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) ${TOOL_INPUT}\" >> ~/.claude/logs/skills.log"
+            "command": "~/.claude/hooks/skill-log.sh \"$(jq -r '.tool_input.skill // \"unknown\"')\" START auto"
           }
         ]
       }
@@ -563,22 +596,24 @@ setup_log_collection() {
 }
 SETTINGS_EOF
     info "作成: ${settings_file} (hooks 設定)"
-  elif ! grep -q "skills.log" "$settings_file" 2>/dev/null; then
-    warn "settings.json は既に存在しますが、skills.log の hook がありません"
+  elif ! grep -q "skill-log" "$settings_file" 2>/dev/null; then
+    warn "settings.json は既に存在しますが、skill-log の hook がありません"
     echo "  以下を手動で settings.json の hooks.PostToolUse に追加してください:"
     echo ""
-    echo '    {'
-    echo '      "matcher": "Skill",'
-    echo '      "hooks": ['
-    echo '        {'
-    echo '          "type": "command",'
-    echo '          "command": "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) ${TOOL_INPUT}\" >> ~/.claude/logs/skills.log"'
-    echo '        }'
-    echo '      ]'
-    echo '    }'
+    cat <<'MANUAL_EOF'
+    {
+      "matcher": "Skill",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "~/.claude/hooks/skill-log.sh \"$(jq -r '.tool_input.skill // \"unknown\"')\" START auto"
+        }
+      ]
+    }
+MANUAL_EOF
     echo ""
   else
-    info "settings.json: skills.log hook は既に設定済み"
+    info "settings.json: skill-log hook は既に設定済み"
   fi
 
   LOGS_CREATED=true

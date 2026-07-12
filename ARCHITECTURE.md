@@ -223,7 +223,7 @@ Claude Code は hooks（イベントに応じて実行されるシェルコマ�
         "hooks": [
           {
             "type": "command",
-            "command": "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) $SKILL_NAME\" >> ~/.claude/logs/skills.log"
+            "command": "~/.claude/hooks/skill-log.sh \"$(jq -r '.tool_input.skill // \"unknown\"')\" START auto"
           }
         ]
       }
@@ -231,6 +231,8 @@ Claude Code は hooks（イベントに応じて実行されるシェルコマ�
   }
 }
 ```
+
+スキル名は hook の stdin JSON（`.tool_input.skill`）から取得する（`$SKILL_NAME` のような環境変数は存在しない）。ログ形式は `skill-log.sh` に一元化され `[timestamp] [<skill>] [START] auto` で統一される。`setup` の Crystallize セットアップ（`--global`）はこの hook 設定の追加と `~/.claude/hooks/skill-log.sh` へのリンク作成を行う。
 
 ### 例: セキュリティ hook（同梱）の wire up
 
