@@ -59,6 +59,7 @@ fstack/
 │   ├── git-workflow.md
 │   ├── testing.md
 │   ├── implementation-flow.md  # 規模別スキル使い分け・単独実装の禁止
+│   ├── work-discipline.md  # バグ修正の3ステップなど作業規律
 │   ├── security.md
 │   ├── context-management.md
 │   ├── memory.md          # 4.7 Auto Memory 4種運用
@@ -77,7 +78,11 @@ fstack/
 │   ├── pre-compact-handover.sh    # 自動圧縮直前に handover 強制
 │   ├── post-compact-warning.sh    # 自動圧縮後に handover 強制
 │   ├── check-debug-code.sh        # JS/TS デバッグコード検出
+│   ├── check-implementation-routing.sh  # 実装前の solo/orchestra 起動を advisory 確認
+│   ├── log-knowledge-read.sh      # ナレッジディレクトリ配下の Read をログ記録
 │   ├── pre-commit-lint.sh         # 多言語 lint dispatcher
+│   ├── lib/                       # hooks 共通ライブラリ
+│   │   └── common.sh              # jq 解決・deny/ask JSON 発行・GNU/BSD 差の吸収
 │   ├── lint/                      # 言語別 handler + 設定テンプレ
 │   │   ├── lint-js.sh
 │   │   ├── lint-php.sh
@@ -87,8 +92,7 @@ fstack/
 │   ├── skill-log.sh               # スキル使用ログ追記
 │   └── README.md                  # 設定方法・カスタマイズ手順
 ├── docs/
-│   ├── prompt-migration-guide.md  # モデルバージョンアップ時のプロンプト再調整ガイド
-│   └── plans/                     # 反映計画書アーカイブ
+│   └── prompt-migration-guide.md  # モデルバージョンアップ時のプロンプト再調整ガイド
 └── templates/
     ├── CLAUDE.md.template              # グローバル CLAUDE.md テンプレート
     ├── project-claude.md.template      # プロジェクト固有 CLAUDE.md テンプレート
@@ -149,24 +153,20 @@ Claude Code は `${CLAUDE_SKILL_DIR}`（デフォルト: `~/.claude/skills/`）�
 ---
 name: architect
 description: 設計分析エージェント
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
-disallowedTools:
-  - Edit
-  - Write
-model: sonnet
+tools: Read, Grep, Glob, Bash
+disallowedTools: Write, Edit, NotebookEdit, Agent
+model: inherit
+maxTurns: 30
 ---
 
 # エージェントへの指示...
 ```
 
 主なフロントマターフィールド:
-- **tools** — エージェントが使用可能なツールのホワイトリスト
-- **disallowedTools** — 明示的に禁止するツール
-- **model** — 使用する Claude モデル（`sonnet`, `opus`, `haiku`）
+- **tools** — エージェントが使用可能なツールのホワイトリスト（カンマ区切りの inline 記法）
+- **disallowedTools** — 明示的に禁止するツール（カンマ区切りの inline 記法）
+- **model** — 使用する Claude モデル（`inherit`, `sonnet`, `opus`, `haiku`）。`inherit` は呼び出し元の会話と同じモデルを使う
+- **maxTurns** — エージェントの最大ターン数（暴走を防ぐ安全装置。設定推奨）
 
 ## シンボリックリンク戦略
 

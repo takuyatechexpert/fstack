@@ -2,6 +2,8 @@
 
 > Claude Code を個人の開発生産性エンジンに変える、実戦検証済みの AI スキルコレクション
 
+> **Note for English speakers:** The skill, rule, and agent instructions in this repository are written in Japanese. Claude reads and follows them regardless of the language you converse in, but be aware the prompt content itself is Japanese when reviewing or customizing it.
+
 ## 特徴
 
 - **Batteries Included** — コードレビュー、テスト、セッション管理、並列実装をすぐに使える
@@ -112,7 +114,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [docs/prompt-migration-guide.md](docs/prompt-migration-guide.md) | Claude モデルのバージョンアップ時に既存プロンプト・スキルを再調整するための汎用ガイド（評価軸・優先度判定・落とし穴） |
+| [docs/prompt-migration-guide.md](docs/prompt-migration-guide.md) | Opus 4.6 → 4.7 での挙動変化と、4.7 でプロンプト・スキル・ルールを書くときの実務ガイド。内容はこの特定バージョン移行に固有だが、次のモデル更新で既存資産を再調整する際の観点（挙動差の洗い出し・優先度判定・落とし穴）を先取りする参照テンプレートとして使える |
 
 ## カスタマイズ
 
@@ -151,6 +153,8 @@ fstack のシンボリックリンクのみ削除します。既存の `~/.claud
 ./setup --force                  # 既存リンクを上書き
 ./setup --uninstall              # アンインストール
 ```
+
+`--skills` / `--categories` によるフィルタが作用するのは **スキルのインストールのみ** です。ルール（`fstack-` プレフィックス付き）とエージェントはフィルタ指定の有無にかかわらず常にインストールされます。
 
 ## ロードマップ
 
