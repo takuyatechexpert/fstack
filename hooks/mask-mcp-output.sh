@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PostToolUse hook: MCP ツールの tool_response に混入したシークレットをマスクして
 # LLM のコンテキストに渡す前に書き換える。
 # Bash の tool_output は公式に書き換え不可のため、MCP ツール専用。

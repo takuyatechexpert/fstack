@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lint-php.sh — PHP handler
 #
 # 責務: 引数で渡された PHP ファイルに対して Laravel Pint を実行する。

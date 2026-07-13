@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # hooks 共通ライブラリ — jq パス解決・deny/ask JSON 発行・GNU/BSD コマンド差の吸収を集約する。
 #
 # 責務: 各 hook から source して使う「関数の定義のみ」を提供する。

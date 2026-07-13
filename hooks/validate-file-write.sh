@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PreToolUse hook: Edit/Write の事前検証
 # 機密ファイル・設定ファイルへの書き込みを検出する
 

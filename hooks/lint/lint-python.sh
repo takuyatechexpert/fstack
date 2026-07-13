@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lint-python.sh — Python handler
 #
 # 責務: 引数で渡された Python ファイルに対して Ruff を実行する。

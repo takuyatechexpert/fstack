@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # check-implementation-routing.sh
 #
 # Edit/Write/NotebookEdit を呼ぶ前に「直近 30 分以内に solo-with-verifier

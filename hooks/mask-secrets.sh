@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # stdin のテキストからシークレットと思われる値をマスクして stdout に出力
 # 用途: 他の hook の jq 出力をパイプして使う
 #

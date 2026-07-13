@@ -92,14 +92,14 @@ cache_valid() {
   )
   for f in "${triggers[@]}"; do
     if [[ -f "$f" ]]; then
-      local mt=$(fstack_file_mtime "$f")
+      local mt; mt=$(fstack_file_mtime "$f")
       (( mt > cache_mtime )) && return 1
     fi
   done
   # Dockerfile.* (Dockerfile.dev, Dockerfile.prod 等)
   for f in "$CWD"/Dockerfile.*; do
     if [[ -f "$f" ]]; then
-      local mt=$(fstack_file_mtime "$f")
+      local mt; mt=$(fstack_file_mtime "$f")
       (( mt > cache_mtime )) && return 1
     fi
   done
@@ -278,8 +278,8 @@ fi
 # --- 8. CI/CD ---
 CI_SECTION=""
 if [[ -d "$CWD/.github/workflows" ]]; then
-  CI_FILES=$(ls "$CWD/.github/workflows/"*.yml 2>/dev/null | xargs -I{} basename {} | _join_comma)
-  [[ -z "$CI_FILES" ]] && CI_FILES=$(ls "$CWD/.github/workflows/"*.yaml 2>/dev/null | xargs -I{} basename {} | _join_comma)
+  CI_FILES=$(find "$CWD/.github/workflows" -maxdepth 1 -type f -name '*.yml' -exec basename {} \; 2>/dev/null | sort | _join_comma)
+  [[ -z "$CI_FILES" ]] && CI_FILES=$(find "$CWD/.github/workflows" -maxdepth 1 -type f -name '*.yaml' -exec basename {} \; 2>/dev/null | sort | _join_comma)
   if [[ -n "$CI_FILES" ]]; then
     CI_SECTION="## CI/CD
 - GitHub Actions: ${CI_FILES}

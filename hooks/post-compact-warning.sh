@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PostCompact hook: ログ記録 + 自動圧縮後の handover 強制指示
 # stdin: JSON {trigger: "manual|auto", compact_summary: "..."}
 # stdout: JSON {additionalContext: "..."} で Claude セッションへ system-reminder を注入

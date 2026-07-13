@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PostToolUse hook: Edit/Write 後に console.log / debugger の残存を検出
 
 # --- lib ブートストラップ: 実体ディレクトリを解決して lib/common.sh を source ---

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PreToolUse hook: Bash コマンドの事前検証
 # パイプ経由の deny 回避、シークレット漏洩、危険パターンを検出する
 #

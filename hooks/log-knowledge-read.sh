@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PostToolUse hook for Read tool
 # 指定したナレッジディレクトリ配下のファイル読み込みのみをログに記録する。
 # マッチ対象は CLAUDE_KNOWLEDGE_DIR で上書き可能（デフォルト: ~/knowledge）。

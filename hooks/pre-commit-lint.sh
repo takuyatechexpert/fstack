@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # pre-commit-lint.sh — 多言語 lint dispatcher
 #
 # 責務: git commit 検出 → ステージ済みファイルを言語別に振り分け → 各 handler 呼び出し

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lint-js.sh — JS/TS handler
 #
 # 責務: 引数で渡された JS/TS ファイルに対して ESLint を実行する。

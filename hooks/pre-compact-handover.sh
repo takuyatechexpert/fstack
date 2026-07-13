@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PreCompact hook: 自動圧縮直前に handover 実行を Claude へ強く指示する
 # stdin: JSON {session_id, transcript_path, cwd, trigger: "manual|auto"}
 # stdout: JSON {additionalContext: "..."} で Claude セッションへ system-reminder を注入

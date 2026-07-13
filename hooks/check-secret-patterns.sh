@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PreToolUse hook: git commit/push 前にプロジェクト固有のシークレットパターンをチェック
 # .claude/secret-patterns.txt が存在するプロジェクトでのみ動作する
 #

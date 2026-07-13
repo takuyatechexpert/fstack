@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # lint-rust.sh — Rust handler
 #
 # 責務: Rust ファイルがステージされている時に cargo clippy を実行する。
