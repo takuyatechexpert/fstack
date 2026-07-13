@@ -95,9 +95,9 @@ fi
 check_prerequisites() {
   local missing=false
 
+  # symlink 配置自体に claude は不要なため hard fail にせず警告に留める（git のみ必須ゲート）
   if ! command -v claude &>/dev/null; then
-    error "claude CLI is required but not found. Install: https://docs.anthropic.com/en/docs/claude-code"
-    missing=true
+    warn "claude CLI not found. Install to use installed skills: https://docs.anthropic.com/en/docs/claude-code"
   fi
 
   if ! command -v git &>/dev/null; then
@@ -125,26 +125,54 @@ create_link() {
   local label="$3"
 
   if [[ "$DRY_RUN" == true ]]; then
-    info "[dry-run] ${label}: ${source} → ${target}"
+    if [[ -e "$target" || -L "$target" ]]; then
+      if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR/"* ]]; then
+        info "[dry-run] ${label}: 再リンク"
+      elif [[ "$FORCE" == true ]]; then
+        info "[dry-run] ${label}: 既存を退避して上書き（--force）"
+      else
+        info "[dry-run] ${label}: スキップ（既存: ${target}）— --force で上書き"
+      fi
+    else
+      info "[dry-run] ${label}: ${source} → ${target}"
+    fi
     return 0
   fi
 
   # Ensure parent directory exists
-  mkdir -p "$(dirname "$target")"
+  # 呼び出し元が `if create_link ...` で set -e を抑止するため、各操作の失敗を明示的に伝播させる
+  if ! mkdir -p "$(dirname "$target")"; then
+    error "親ディレクトリの作成に失敗しました: $(dirname "$target")"
+    return 1
+  fi
 
   if [[ -e "$target" || -L "$target" ]]; then
     # If it's already a fstack symlink, always overwrite
-    if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR"* ]]; then
+    if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR/"* ]]; then
       rm "$target"
     elif [[ "$FORCE" == true ]]; then
-      rm -rf "$target"
+      # 破壊的削除を避け、復元可能な退避に倒す（.$$ で同一秒内の連続 --force 衝突も回避）
+      local backup; backup="${target}.fstack-bak.$(date +%Y%m%d%H%M%S).$$"
+      # 退避先が既に存在する場合は退避物の破壊を避けて中止する
+      if [[ -e "$backup" || -L "$backup" ]]; then
+        error "退避先が既に存在します。上書きを避けて中止します: ${backup}"
+        return 1
+      fi
+      if ! mv "$target" "$backup"; then
+        error "既存の退避に失敗しました: ${target} → ${backup}"
+        return 1
+      fi
+      warn "既存を退避しました: ${backup}"
     else
       warn "Skipped (exists): ${target} — use --force to overwrite"
       return 1
     fi
   fi
 
-  ln -s "$source" "$target"
+  if ! ln -s "$source" "$target"; then
+    error "symlink の作成に失敗しました: ${target}"
+    return 1
+  fi
   info "${label}: ${target}"
   return 0
 }
@@ -154,7 +182,7 @@ remove_link() {
   local target="$1"
   local label="$2"
 
-  if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR"* ]]; then
+  if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$FSTACK_DIR/"* ]]; then
     if [[ "$DRY_RUN" == true ]]; then
       info "[dry-run] Remove ${label}: ${target}"
     else
@@ -494,13 +522,14 @@ setup_knowledge_base() {
   echo "│          project-context.md                                │"
   echo "└─────────────────────────────────────────────────────────────┘"
 
-  if ! ask_yn "ナレッジベースをセットアップしますか？"; then
-    info "ナレッジベース: スキップしました"
+  # dry-run では一切プロンプトせず、作成予定だけを表示する
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] ナレッジベース: ${knowledge_dir}/ を作成（承認されればテンプレートを配置）"
     return
   fi
 
-  if [[ "$DRY_RUN" == true ]]; then
-    info "[dry-run] ナレッジベース: ${knowledge_dir}/ を作成"
+  if ! ask_yn "ナレッジベースをセットアップしますか？"; then
+    info "ナレッジベース: スキップしました"
     return
   fi
 
@@ -542,13 +571,14 @@ setup_log_collection() {
   echo "│ hooks:  settings.json に PostToolUse hook を追加            │"
   echo "└─────────────────────────────────────────────────────────────┘"
 
-  if ! ask_yn "ログ収集をセットアップしますか？"; then
-    info "ログ収集: スキップしました"
+  # dry-run では一切プロンプトせず、作成予定だけを表示する
+  if [[ "$DRY_RUN" == true ]]; then
+    info "[dry-run] ログ収集: ${logs_dir}/ を作成、skill-log.sh を hooks/ にリンク、settings.json に hooks を追加"
     return
   fi
 
-  if [[ "$DRY_RUN" == true ]]; then
-    info "[dry-run] ログ収集: ${logs_dir}/ を作成、skill-log.sh を hooks/ にリンク、settings.json に hooks を追加"
+  if ! ask_yn "ログ収集をセットアップしますか？"; then
+    info "ログ収集: スキップしました"
     return
   fi
 
@@ -563,7 +593,7 @@ setup_log_collection() {
   # fstack 以外の実体が既にある場合は上書きせず、自動セットアップを中止して手動案内を出す
   if [[ "$FORCE" != true ]] \
      && { [[ -e "$skill_log_target" ]] || [[ -L "$skill_log_target" ]]; } \
-     && ! { [[ -L "$skill_log_target" ]] && [[ "$(readlink "$skill_log_target")" == "$FSTACK_DIR"* ]]; }; then
+     && ! { [[ -L "$skill_log_target" ]] && [[ "$(readlink "$skill_log_target")" == "$FSTACK_DIR/"* ]]; }; then
     warn "既存の ${skill_log_target} は fstack 以外の実体です。ログ収集の自動セットアップを中止します。"
     echo "  手動で対応してください（--force で上書きも可能）:"
     echo "    1) 既存の skill-log.sh を退避し、${skill_log_src} を ${skill_log_target} に配置（symlink 推奨）"
