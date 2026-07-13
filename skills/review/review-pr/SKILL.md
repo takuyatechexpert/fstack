@@ -28,10 +28,10 @@ PR番号のみの場合は `git remote get-url origin` からowner/repoを取得
 
 ```bash
 git fetch origin {head_branch}
-git worktree add /tmp/review-pr-{PR番号} origin/{head_branch}
+git worktree add /tmp/review-pr-{repo}-{PR番号} origin/{head_branch}
 ```
 
-以降のPhaseでは `/tmp/review-pr-{PR番号}` をルートとしてファイルを読む。
+`{repo}` には Phase 1 で取得したリポジトリ名を使う（並行レビュー時のパス衝突を避けるため）。以降のPhaseでは `/tmp/review-pr-{repo}-{PR番号}` をルートとしてファイルを読む。
 
 ### Phase 3: プロジェクト特性の把握と差分分析
 
@@ -47,7 +47,7 @@ worktree内で以下を確認:
 #### 3-2: 差分の分析とファイル分類
 
 ```bash
-cd /tmp/review-pr-{PR番号}
+cd /tmp/review-pr-{repo}-{PR番号}
 git diff origin/{base_branch}...HEAD --name-only
 git diff origin/{base_branch}...HEAD
 ```
@@ -100,7 +100,7 @@ Phase 3-1で把握したプロジェクト特性・方針・ルールに基づ�
 
 ### Phase 7: クリーンアップ
 
-成功・失敗問わず `git worktree remove /tmp/review-pr-{PR番号}` を実行。残っている場合は `--force` で強制削除。
+成功・失敗問わず `git worktree remove /tmp/review-pr-{repo}-{PR番号}` を実行。残っている場合は `--force` で強制削除。
 
 ## 落とし穴
 
