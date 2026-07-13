@@ -1,0 +1,40 @@
+name: CI
+
+on: [push, pull_request]
+
+# 読み取り専用 CI。リポジトリ設定に依存せず最小権限に固定する。
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      # severity は warning でゲートする。style(default) は source 追跡不可の SC1091 や
+      # 単一引用符内 jq を誤検知する SC2016 など意図的な偽陽性が多く、error だけでは緩すぎるため。
+      - name: shellcheck
+        run: shellcheck -S warning setup hooks/*.sh hooks/lib/*.sh hooks/lint/*.sh
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pyyaml
+        run: pip install pyyaml
+
+      - name: Validate SKILL.md frontmatter (strict YAML)
+        run: python3 -c "import yaml,glob; [yaml.safe_load(open(f).read().split('---',2)[1]) for f in glob.glob('skills/**/SKILL.md',recursive=True)]"
+
+      - name: Lint agents
+        run: |
+          for f in agents/*.md; do
+            python3 skills/meta/agent-creator/scripts/lint-agent.py "$f"
+          done
+
+      - name: Run bash tests
+        run: bash tests/run.sh
