@@ -1,11 +1,39 @@
 #!/usr/bin/env bash
 # bootstrap-env.sh — SessionStart hook: 環境情報を収集してキャッシュ + additionalContext に注入
-# macOS (darwin) 前提。stdin から SessionStart hook の JSON を受け取る。
-# Linux で使う場合は stat -f / md5 を GNU coreutils 版に置き換える必要あり。
+# stdin から SessionStart hook の JSON を受け取る。GNU/BSD のコマンド差（md5 / stat）は
+# lib/common.sh の fstack_md5_hex / fstack_file_mtime が feature-detect で吸収する。
 set +e
 
-JQ=$(command -v jq || echo "/opt/homebrew/bin/jq")
-CACHE_DIR="$HOME/.claude/cache/bootstrap"
+# --- lib ブートストラップ: 実体ディレクトリを解決して lib/common.sh を source ---
+# symlink 運用でも実体位置の lib/ を辿れるよう POSIX ポータブルに解決（readlink -f 非依存）。
+# SessionStart のため lib 解決失敗はキャッシュ鍵計算不能 → キャッシュを使わず毎回生成にフォールバック。
+_self="$0"
+_guard=0
+while [ -L "$_self" ]; do
+  _guard=$((_guard + 1))
+  if [ "$_guard" -gt 40 ]; then _self=""; break; fi
+  _dir=$(cd -P "$(dirname "$_self")" 2>/dev/null && pwd) || { _self=""; break; }
+  _link=$(readlink "$_self") || { _self=""; break; }
+  case "$_link" in
+    /*) _self="$_link" ;;
+    *)  _self="$_dir/$_link" ;;
+  esac
+done
+FSTACK_HOOKS_DIR=""
+if [ -n "$_self" ]; then
+  FSTACK_HOOKS_DIR=$(cd -P "$(dirname "$_self")" 2>/dev/null && pwd || printf '')
+fi
+_fstack_lib_loaded=0
+if [ -n "$FSTACK_HOOKS_DIR" ] && [ -f "$FSTACK_HOOKS_DIR/lib/common.sh" ]; then
+  # shellcheck source=/dev/null
+  if . "$FSTACK_HOOKS_DIR/lib/common.sh"; then _fstack_lib_loaded=1; fi
+fi
+
+# 改行区切りの項目を「, 」区切りで結合する（BSD paste -sd', ' は3項目以上で崩れるため awk で代替）。
+_join_comma() { awk 'NR>1{printf ", "}{printf "%s",$0}END{if(NR)print ""}'; }
+
+JQ=$(command -v jq || true)
+CACHE_DIR="${FSTACK_CACHE_DIR:-$HOME/.claude/cache/bootstrap}"
 FORCE=false
 MAX_AGE=86400  # 24 hours
 
@@ -19,10 +47,17 @@ INPUT=$(cat)
 CWD=$(echo "$INPUT" | "$JQ" -r '.cwd // empty')
 [[ -z "$CWD" ]] && exit 0
 
-# cwd の md5 ハッシュをキーにする (macOS)
-HASH=$(echo -n "$CWD" | md5)
-CACHE_FILE="${CACHE_DIR}/${HASH}.md"
-mkdir -p "$CACHE_DIR"
+# cwd の md5 ハッシュをキャッシュキーにする。lib 未ロード時は鍵計算不能なので
+# キャッシュを無効化し（CACHE_FILE 空）、毎回生成にフォールバックする。
+HASH=""
+if [ "$_fstack_lib_loaded" = 1 ]; then
+  HASH=$(printf '%s' "$CWD" | fstack_md5_hex)
+fi
+CACHE_FILE=""
+if [ -n "$HASH" ]; then
+  CACHE_FILE="${CACHE_DIR}/${HASH}.md"
+  mkdir -p "$CACHE_DIR"
+fi
 
 # additionalContext として stdout に JSON を吐く
 emit_context() {
@@ -57,23 +92,23 @@ cache_valid() {
   )
   for f in "${triggers[@]}"; do
     if [[ -f "$f" ]]; then
-      local mt=$(stat -f %m "$f" 2>/dev/null || echo 0)
+      local mt=$(fstack_file_mtime "$f")
       (( mt > cache_mtime )) && return 1
     fi
   done
   # Dockerfile.* (Dockerfile.dev, Dockerfile.prod 等)
   for f in "$CWD"/Dockerfile.*; do
     if [[ -f "$f" ]]; then
-      local mt=$(stat -f %m "$f" 2>/dev/null || echo 0)
+      local mt=$(fstack_file_mtime "$f")
       (( mt > cache_mtime )) && return 1
     fi
   done
   return 0
 }
 
-# --- キャッシュヒット判定 ---
-if [[ "$FORCE" == "false" && -f "$CACHE_FILE" ]]; then
-  CACHE_MTIME=$(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0)
+# --- キャッシュヒット判定（CACHE_FILE 空 = lib 未ロードでキャッシュ無効時はスキップ）---
+if [[ "$FORCE" == "false" && -n "$CACHE_FILE" && -f "$CACHE_FILE" ]]; then
+  CACHE_MTIME=$(fstack_file_mtime "$CACHE_FILE")
   NOW=$(date +%s)
   AGE=$(( NOW - CACHE_MTIME ))
   if (( AGE < MAX_AGE )) && cache_valid "$CACHE_MTIME"; then
@@ -179,9 +214,9 @@ fi
 DOCKER_SECTION=""
 if [[ -n "$COMPOSE_FILE" ]]; then
   if command -v yq &>/dev/null; then
-    SERVICES=$(yq -r '.services | keys | .[]' "$COMPOSE_FILE" 2>/dev/null | paste -sd', ' -)
+    SERVICES=$(yq -r '.services | keys | .[]' "$COMPOSE_FILE" 2>/dev/null | _join_comma)
   else
-    SERVICES=$(grep -E '^  [a-zA-Z_-]+:' "$COMPOSE_FILE" 2>/dev/null | sed 's/://;s/^ *//' | paste -sd', ' -)
+    SERVICES=$(grep -E '^  [a-zA-Z_-]+:' "$COMPOSE_FILE" 2>/dev/null | sed 's/://;s/^ *//' | _join_comma)
   fi
   if [[ -n "$SERVICES" ]]; then
     DOCKER_SECTION="## Docker Services
@@ -202,7 +237,7 @@ fi
 # --- 5. Makefile Targets ---
 MAKE_SECTION=""
 if [[ -f "$CWD/Makefile" ]]; then
-  TARGETS=$(grep -E '^[a-zA-Z_-]+:' "$CWD/Makefile" 2>/dev/null | sed 's/:.*//' | head -20 | paste -sd', ' -)
+  TARGETS=$(grep -E '^[a-zA-Z_-]+:' "$CWD/Makefile" 2>/dev/null | sed 's/:.*//' | head -20 | _join_comma)
   if [[ -n "$TARGETS" ]]; then
     MAKE_SECTION="## Makefile Targets
 - ${TARGETS}
@@ -213,7 +248,7 @@ fi
 # --- 6. Environment Keys (.env.example) ---
 ENV_SECTION=""
 if [[ -f "$CWD/.env.example" ]]; then
-  ENV_KEYS=$(grep -E '^[A-Z_]+=' "$CWD/.env.example" 2>/dev/null | cut -d= -f1 | head -30 | paste -sd', ' -)
+  ENV_KEYS=$(grep -E '^[A-Z_]+=' "$CWD/.env.example" 2>/dev/null | cut -d= -f1 | head -30 | _join_comma)
   if [[ -n "$ENV_KEYS" ]]; then
     ENV_SECTION="## Environment Keys (.env.example)
 - ${ENV_KEYS}
@@ -243,8 +278,8 @@ fi
 # --- 8. CI/CD ---
 CI_SECTION=""
 if [[ -d "$CWD/.github/workflows" ]]; then
-  CI_FILES=$(ls "$CWD/.github/workflows/"*.yml 2>/dev/null | xargs -I{} basename {} | paste -sd', ' -)
-  [[ -z "$CI_FILES" ]] && CI_FILES=$(ls "$CWD/.github/workflows/"*.yaml 2>/dev/null | xargs -I{} basename {} | paste -sd', ' -)
+  CI_FILES=$(ls "$CWD/.github/workflows/"*.yml 2>/dev/null | xargs -I{} basename {} | _join_comma)
+  [[ -z "$CI_FILES" ]] && CI_FILES=$(ls "$CWD/.github/workflows/"*.yaml 2>/dev/null | xargs -I{} basename {} | _join_comma)
   if [[ -n "$CI_FILES" ]]; then
     CI_SECTION="## CI/CD
 - GitHub Actions: ${CI_FILES}
@@ -283,7 +318,7 @@ if [[ -n "$COMPOSE_IMAGES" ]]; then
       fi
     fi
   done <<< "$COMPOSE_IMAGES"
-  SUMMARY_DB=$(echo "$DB_ENTRIES" | grep -v '^$' | paste -sd', ' -)
+  SUMMARY_DB=$(echo "$DB_ENTRIES" | grep -v '^$' | _join_comma)
 fi
 
 # Framework: composer.json / package.json から検出
@@ -321,10 +356,10 @@ collect_primary_lang() {
 
 collect_primary_lang "$DOCKERFILE_IMAGES"
 [[ -z "$PRIMARY_LANG_ENTRIES" ]] && collect_primary_lang "$COMPOSE_IMAGES"
-SUMMARY_LANG=$(echo "$PRIMARY_LANG_ENTRIES" | grep -v '^$' | paste -sd', ' -)
+SUMMARY_LANG=$(echo "$PRIMARY_LANG_ENTRIES" | grep -v '^$' | _join_comma)
 
 # Test
-SUMMARY_TEST=$(echo "$TEST_FW" | grep -v '^$' | sed 's/^- //' | paste -sd', ' -)
+SUMMARY_TEST=$(echo "$TEST_FW" | grep -v '^$' | sed 's/^- //' | _join_comma)
 
 SUMMARY_SECTION=""
 if [[ -n "$SUMMARY_DB" || -n "$SUMMARY_FRAMEWORK" || -n "$SUMMARY_LANG" || -n "$SUMMARY_TEST" ]]; then
@@ -364,6 +399,6 @@ ${TEST_SECTION}"
 [[ -n "$CI_SECTION" ]] && OUTPUT="${OUTPUT}
 ${CI_SECTION}"
 
-# キャッシュに書き込み + additionalContext に注入
-echo "$OUTPUT" > "$CACHE_FILE"
+# キャッシュに書き込み（CACHE_FILE 空 = lib 未ロードでキャッシュ無効時はスキップ）+ additionalContext に注入
+[[ -n "$CACHE_FILE" ]] && echo "$OUTPUT" > "$CACHE_FILE"
 emit_context "$OUTPUT"

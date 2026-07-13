@@ -40,22 +40,29 @@ fi
 LINT_DIR="$HOOKS_DIR/lint"
 CONFIG_FILE="$LINT_DIR/config.json"
 
+# 共通ライブラリを source（安全系のため解決失敗は fail-closed）
+if [ ! -r "$HOOKS_DIR/lib/common.sh" ]; then
+  echo "[pre-commit-lint] 共通ライブラリ lib/common.sh を解決できません。安全のためコミットをブロックします。" >&2
+  exit 2
+fi
+. "$HOOKS_DIR/lib/common.sh"
+
 # jq 不在は fail-closed（PreToolUse のブロッキングエラー）
-if ! command -v jq >/dev/null 2>&1; then
+if ! fstack_have_jq; then
   echo "[pre-commit-lint] jq が見つかりません。安全のためコミットをブロックします。" >&2
   exit 2
 fi
 
-input=$(cat)
+input=$(fstack_read_input)
 
 # JSON parse に失敗したら fail-closed
-if ! printf '%s' "$input" | jq empty >/dev/null 2>&1; then
+if ! printf '%s' "$input" | fstack_jq empty >/dev/null 2>&1; then
   echo "[pre-commit-lint] hook 入力の JSON 解析に失敗しました。安全のためブロックします。" >&2
   exit 2
 fi
 
-cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
-cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
+cmd=$(printf '%s' "$input" | fstack_jq -r '.tool_input.command // ""')
+cwd=$(printf '%s' "$input" | fstack_jq -r '.cwd // ""')
 
 # git commit 以外は即終了（settings.json の if フィルタで1次ガード、ここで2次ガード）
 # dash オプションに続く値トークン（-c user.name=x 等）も飛ばし、オプション挟みを検出する
@@ -127,7 +134,7 @@ done
 get_override() {
   local lang="$1"
   [[ ! -f "$CONFIG_FILE" ]] && return 0
-  jq -r --arg root "$ROOT" --arg lang "$lang" '
+  fstack_jq -r --arg root "$ROOT" --arg lang "$lang" '
     .projects[]?
     | select(.path as $p | $root == $p or ($root | startswith($p + "/")))
     | .commands[$lang] // empty
@@ -157,7 +164,14 @@ run_lang() {
   fi
 
   if [[ $rc -ne 0 ]]; then
-    echo "$output" >&2
+    # lint 出力（ソース断片を含みうる）を全文露出せず先頭 N 行に要約する（Run1 繰越#1）。
+    # deny 判定自体は不変（ERRORS への追加は従来どおり）。
+    local head_n=20 total
+    total=$(printf '%s\n' "$output" | wc -l | tr -d ' ')
+    printf '%s\n' "$output" | head -n "$head_n" >&2
+    if [ "$total" -gt "$head_n" ]; then
+      printf '… (%d 行省略)\n' "$((total - head_n))" >&2
+    fi
     ERRORS+=("$lang")
   fi
 }
@@ -169,14 +183,7 @@ run_lang "rust"   "${RS_FILES[@]}"
 
 if (( ${#ERRORS[@]} > 0 )); then
   reason="Lint エラーがあります (${ERRORS[*]})。コミット前に修正してください。"
-  jq -n --arg reason "$reason" '{
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: $reason
-    }
-  }'
-  exit 0
+  fstack_emit_deny "$reason"
 fi
 
 exit 0

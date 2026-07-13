@@ -38,6 +38,7 @@ setup_lint_env() {
   cp "$HOOKS_DIR/pre-commit-lint.sh" "$HOOKSCOPY/pre-commit-lint.sh"
   chmod +x "$HOOKSCOPY/pre-commit-lint.sh"
   cp -R "$HOOKS_DIR/lint" "$HOOKSCOPY/lint"
+  cp -R "$HOOKS_DIR/lib" "$HOOKSCOPY/lib"   # lib/common.sh を同梱（実デプロイ構成の再現）
   # 対象リポジトリの js を必ず失敗させる override
   printf '{"projects":[{"path":"%s","commands":{"js":"echo NG; exit 1"}}]}\n' "$ROOT" > "$HOOKSCOPY/lint/config.json"
 
@@ -85,12 +86,15 @@ ROOT=$(cd "$WORK" && git rev-parse --show-toplevel)
 NOLINT=$(mktemp -d /tmp/fstack-nolint-XXXXXX)
 cp "$HOOKS_DIR/pre-commit-lint.sh" "$NOLINT/pre-commit-lint.sh"
 chmod +x "$NOLINT/pre-commit-lint.sh"
+cp -R "$HOOKS_DIR/lib" "$NOLINT/lib"   # lib は配置（lib不在ではなく lint/不在で exit 2 になることを担保）
 # lint/ ディレクトリを意図的に配置しない → 解決後も lint/ が見つからない状態
 printf '{"tool_input":{"command":"git commit -m test"},"cwd":"%s"}' "$ROOT" > "$WORK/p.json"
 ERRF="$WORK/err76"
 ( bash "$NOLINT/pre-commit-lint.sh" < "$WORK/p.json" >/dev/null 2>"$ERRF" ); RC=$?
 assert_eq "2" "$RC" "L7-6: lint/ 実体解決失敗で exit 2（サイレント no-op にしない）"
-assert_nonempty "$(cat "$ERRF")" "L7-6: lint/ 実体解決失敗で stderr にメッセージが出る"
+# lib は配置済み。exit 2 が lint/ 解決失敗由来であることを stderr メッセージで担保する
+assert_contains "$(cat "$ERRF")" "lint ディレクトリを解決できません" "L7-6: exit 2 は lint/ 解決失敗由来（stderr で担保）"
+assert_not_contains "$(cat "$ERRF")" "共通ライブラリ" "L7-6: lib 不在ではない（lib 同梱済みなので lib エラーは出ない）"
 
 # --- M4-2: symlink 循環（A→B→A）経由の起動 → ハングせず fail-closed（M2 循環ガード）---
 # 注記: macOS の MAXSYMLINKS(≈32) が hook の循環ガード(40)より先に発火し、実際には
@@ -99,6 +103,7 @@ assert_nonempty "$(cat "$ERRF")" "L7-6: lint/ 実体解決失敗で stderr に�
 CYC=$(mktemp -d /tmp/fstack-cyc-XXXXXX)
 cp "$HOOKS_DIR/pre-commit-lint.sh" "$CYC/real.sh"; chmod +x "$CYC/real.sh"
 cp -R "$HOOKS_DIR/lint" "$CYC/lint"
+cp -R "$HOOKS_DIR/lib" "$CYC/lib"   # lib/common.sh を同梱（実デプロイ構成の再現）
 ln -s "$CYC/B" "$CYC/A"   # A → B
 ln -s "$CYC/A" "$CYC/B"   # B → A（循環）
 WORK=$(mktemp -d /tmp/fstack-cycw-XXXXXX)

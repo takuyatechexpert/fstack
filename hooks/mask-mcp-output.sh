@@ -15,10 +15,13 @@
 
 set -uo pipefail
 
-# HOME 未設定でも set -u でクラッシュしないようフォールバック（ログは best-effort）
-LOG_FILE="${HOME:-}/.claude/logs/mcp-mask.log"
+# ログ先: fstack_log_dir と同じ解決（FSTACK_LOG_DIR 既定 ~/.claude/logs）。
+# lib ロード前・ロード失敗時でも秘匿ログを残せるよう、ここでは lib 非依存で定義する
+# （HOME 未設定でも set -u でクラッシュしないようフォールバック）。
+LOG_FILE="${FSTACK_LOG_DIR:-${HOME:-}/.claude/logs}/mcp-mask.log"
 
 # 固定秘匿メッセージを updatedMCPToolOutput として出力する（jq 非依存）。
+# ★ lib ブートストラップより前に定義し、lib 不在でも秘匿を返せる順序を保つ。
 # reason は固定集合 masker_missing/masker_failed/invalid_json/internal_error のみで、
 # メッセージ本文に " や \ を含まないため JSON エスケープは不要。
 emit_redaction() {
@@ -32,45 +35,10 @@ append_log() {
   return 0
 }
 
-# jq が無ければ payload 解析もマスク検証もできない → 安全側に秘匿
-if ! command -v jq >/dev/null 2>&1; then
-  append_log "[MCP_MASK_FALLBACK]" "(jq not found; response redacted)" || true
-  emit_redaction "internal_error"
-  exit 0
-fi
-
-PAYLOAD=$(cat)
-
-# tool_name 抽出。jq の exit code を個別に捕捉し、parse 失敗（rc!=0）は fail-open にせず秘匿する
-TOOL_NAME=$(printf '%s' "$PAYLOAD" | jq -r '.tool_name // ""' 2>/dev/null); TN_RC=$?
-if [ "$TN_RC" -ne 0 ]; then
-  append_log "[MCP_MASK_FALLBACK]" "(payload parse failed; response redacted)" || true
-  emit_redaction "internal_error"
-  exit 0
-fi
-
-# parse 成功かつ MCP ツール以外は正当なスキップ（matcher でも絞っているが念のため）
-case "$TOOL_NAME" in
-  mcp__*) ;;
-  *) exit 0 ;;
-esac
-
-# ログ用に TOOL_NAME をサニタイズ（[A-Za-z0-9_-] 以外を除去し最大 128 文字）
-SAFE_TOOL_NAME=$(printf '%s' "$TOOL_NAME" | LC_ALL=C tr -cd 'A-Za-z0-9_-' | cut -c1-128)
-
-# tool_response 抽出。jq rc を捕捉し parse 失敗は秘匿。rc=0 で値が真に null/空なら正当なスキップ
-TOOL_RESPONSE=$(printf '%s' "$PAYLOAD" | jq '.tool_response' 2>/dev/null); TR_RC=$?
-if [ "$TR_RC" -ne 0 ]; then
-  append_log "[MCP_MASK_FALLBACK]" "$SAFE_TOOL_NAME (tool_response parse failed; response redacted)" || true
-  emit_redaction "internal_error"
-  exit 0
-fi
-if [ "$TOOL_RESPONSE" = "null" ] || [ -z "$TOOL_RESPONSE" ]; then
-  exit 0
-fi
-
-# 自身の実体位置を POSIX ポータブルに解決する（plain readlink + cd -P で symlink を追跡）。
-# 解決に失敗した場合は fail-closed で秘匿する。
+# --- lib ブートストラップ: 実体ディレクトリを解決して lib/common.sh を source ---
+# 解決した SCRIPT_DIR は後段の mask-secrets.sh 探索でも再利用する（symlink 追跡は
+# plain readlink + cd -P。readlink -f 非依存）。PostToolUse のため実体解決失敗・lib 不在は
+# いずれも fail-closed で秘匿する（emit_redaction はこのブロックより前に定義済み）。
 SELF="$0"
 _guard=0
 while [ -L "$SELF" ]; do
@@ -88,11 +56,57 @@ if [ -n "$SELF" ]; then
   SCRIPT_DIR=$(cd -P "$(dirname "$SELF")" 2>/dev/null && pwd || printf '')
 fi
 if [ -z "$SCRIPT_DIR" ]; then
-  append_log "[MCP_MASK_FALLBACK]" "$SAFE_TOOL_NAME (script dir resolution failed; response redacted)" || true
+  append_log "[MCP_MASK_FALLBACK]" "(script dir resolution failed; response redacted)" || true
+  emit_redaction "internal_error"
+  exit 0
+fi
+if [ ! -f "$SCRIPT_DIR/lib/common.sh" ] || ! . "$SCRIPT_DIR/lib/common.sh"; then
+  append_log "[MCP_MASK_FALLBACK]" "(lib/common.sh unavailable; response redacted)" || true
   emit_redaction "internal_error"
   exit 0
 fi
 
+# lib ロード後は fstack_log_dir を正とする（上の lib 非依存定義と同値だが契約準拠で再設定）。
+LOG_FILE="$(fstack_log_dir)/mcp-mask.log"
+
+# jq が無ければ payload 解析もマスク検証もできない → 安全側に秘匿
+if ! fstack_have_jq; then
+  append_log "[MCP_MASK_FALLBACK]" "(jq not found; response redacted)" || true
+  emit_redaction "internal_error"
+  exit 0
+fi
+
+PAYLOAD=$(cat)
+
+# tool_name 抽出。jq の exit code を個別に捕捉し、parse 失敗（rc!=0）は fail-open にせず秘匿する
+TOOL_NAME=$(printf '%s' "$PAYLOAD" | fstack_jq -r '.tool_name // ""' 2>/dev/null); TN_RC=$?
+if [ "$TN_RC" -ne 0 ]; then
+  append_log "[MCP_MASK_FALLBACK]" "(payload parse failed; response redacted)" || true
+  emit_redaction "internal_error"
+  exit 0
+fi
+
+# parse 成功かつ MCP ツール以外は正当なスキップ（matcher でも絞っているが念のため）
+case "$TOOL_NAME" in
+  mcp__*) ;;
+  *) exit 0 ;;
+esac
+
+# ログ用に TOOL_NAME をサニタイズ（[A-Za-z0-9_-] 以外を除去し最大 128 文字）
+SAFE_TOOL_NAME=$(printf '%s' "$TOOL_NAME" | LC_ALL=C tr -cd 'A-Za-z0-9_-' | cut -c1-128)
+
+# tool_response 抽出。jq rc を捕捉し parse 失敗は秘匿。rc=0 で値が真に null/空なら正当なスキップ
+TOOL_RESPONSE=$(printf '%s' "$PAYLOAD" | fstack_jq '.tool_response' 2>/dev/null); TR_RC=$?
+if [ "$TR_RC" -ne 0 ]; then
+  append_log "[MCP_MASK_FALLBACK]" "$SAFE_TOOL_NAME (tool_response parse failed; response redacted)" || true
+  emit_redaction "internal_error"
+  exit 0
+fi
+if [ "$TOOL_RESPONSE" = "null" ] || [ -z "$TOOL_RESPONSE" ]; then
+  exit 0
+fi
+
+# 実体位置（SCRIPT_DIR）はブートストラップで解決済み。ここから mask-secrets.sh を探索する。
 # 2段フォールバック: 直接参照/symlink 名 → Option B の fstack- プレフィックス付きコピー
 MASK_SCRIPT="${SCRIPT_DIR}/mask-secrets.sh"
 if [ ! -f "$MASK_SCRIPT" ]; then
@@ -118,7 +132,7 @@ if [ "$TOOL_RESPONSE" = "$MASKED" ]; then
 fi
 
 # マスク後テキストが JSON として妥当かを検証。壊れていたら部分マスクは渡さず秘匿する
-if ! printf '%s' "$MASKED" | jq empty >/dev/null 2>&1; then
+if ! printf '%s' "$MASKED" | fstack_jq empty >/dev/null 2>&1; then
   append_log "[MCP_MASK_FALLBACK]" "$SAFE_TOOL_NAME (masked output invalid JSON; response redacted)" || true
   emit_redaction "invalid_json"
   exit 0
@@ -128,7 +142,7 @@ fi
 append_log "[MCP_MASK]" "$SAFE_TOOL_NAME (secrets masked in response)" || true
 
 # updatedMCPToolOutput で置換。巨大レスポンス対策として値渡しは stdin 経由（--argjson を使わない）
-FINAL=$(printf '%s' "$MASKED" | jq -c '{
+FINAL=$(printf '%s' "$MASKED" | fstack_jq -c '{
   hookSpecificOutput: {
     hookEventName: "PostToolUse",
     updatedMCPToolOutput: .

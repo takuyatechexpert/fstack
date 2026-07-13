@@ -68,10 +68,13 @@ ln -s "$(pwd)/hooks/log-knowledge-read.sh"     ~/.claude/hooks/fstack-log-knowle
 chmod +x hooks/*.sh hooks/lint/*.sh
 ```
 
-Option B（symlink）でも次の hook は実体位置を基準に解決するため正しく動く:
+Option B（symlink）でも各 hook は実体位置を基準に解決するため正しく動く。symlink は fstack の実体を指すため、共通ライブラリ `hooks/lib/common.sh` も実体位置から source される（別途コピー不要）:
 
-- `pre-commit-lint.sh` — symlink 経由で起動しても、POSIX ポータブルな symlink 追跡ループ（plain `readlink` + `cd -P`。`readlink -f` 非依存で旧 macOS でも動く）で実体を辿り、実体と同階層の `lint/` を見つける。循環 symlink はガードで検知し exit 2
-- `mask-mcp-output.sh` — 同じ symlink 追跡ループで実体位置から `mask-secrets.sh`（不在時は `fstack-mask-secrets.sh`）を解決する
+- 全 hook — POSIX ポータブルな symlink 追跡ループ（plain `readlink` + `cd -P`。`readlink -f` 非依存で旧 macOS でも動く）で実体を辿り、実体と同階層の `lib/common.sh` を source する
+- `pre-commit-lint.sh` — 同じ追跡で実体と同階層の `lint/` を見つける。循環 symlink はガードで検知し exit 2
+- `mask-mcp-output.sh` — 同じ追跡で実体位置から `mask-secrets.sh`（不在時は `fstack-mask-secrets.sh`）を解決する
+
+なお hook を fstack 外へ**物理コピー**して使う場合は、同階層の `lib/`（および `pre-commit-lint.sh` は `lint/`、`mask-mcp-output.sh` は `mask-secrets.sh`）も一緒にコピーすること（未同梱時の挙動は「共通ライブラリの公開契約」を参照）。
 
 ### 2. `~/.claude/settings.json` に追加
 
@@ -184,24 +187,45 @@ INTERNAL_API_[A-Z0-9]{20,}
 
 `path` がリポジトリルートと一致、または `path/` で始まる場合にマッチ。`commands` の言語キー (`js` / `php` / `python` / `rust`) → シェルコマンドで、`$ROOT` で実行される。
 
+## 共通ライブラリ `lib/common.sh` と公開契約
+
+各 hook は自身の実体ディレクトリの `lib/common.sh` を source して、jq のパス解決（`command -v` へ統一）・GNU/BSD コマンド差（`md5`/`md5sum`・`stat -f`/`stat -c`・`date -j -f`/`date -d`）の吸収・deny/ask JSON 発行を共通化する。OS 判定（`uname`）ではなくコマンドの成否で分岐する feature-detect のため、**macOS / Linux 双方で置換なしに動く**（従来の「Linux では stat/md5/date を置換」という注意書きは lib が吸収したため不要になった）。
+
+利用時の前提（公開契約）:
+
+- **コピー運用では `lib/common.sh` も同梱必須**。hook を別の場所へ物理コピーして使う場合、同階層に `lib/common.sh` が無いと、安全系（`validate-bash` / `validate-file-write` / `check-secret-patterns` / `pre-commit-lint`）は fail-closed で `exit 2`（恒久ブロック）になる。Option A（直接参照）・Option B（fstack の実体を指す symlink）はいずれも実体位置の `lib/` を辿るため同梱不要
+- **安全系 hook は jq 必須**。jq が PATH に無い場合、安全系はブロック（`exit 2` の fail-closed）に倒す（従来の素通りから挙動変更）。非安全系（`check-implementation-routing` / `log-knowledge-read` / `check-debug-code` / `bootstrap-env` / `mask-mcp-output`）は役割に応じて best-effort continue または秘匿にフォールバックする
+
+## 環境変数 override
+
+| 環境変数 | 既定値 | 対象 hook | 用途 |
+|---|---|---|---|
+| `FSTACK_LOG_DIR` | `~/.claude/logs` | `log-knowledge-read` / `mask-mcp-output` | ログ出力先ディレクトリ |
+| `FSTACK_CACHE_DIR` | `~/.claude/cache/bootstrap` | `bootstrap-env` | 環境情報キャッシュの格納先 |
+| `FSTACK_ROUTING_WINDOW_SEC` | `1800`（30分） | `check-implementation-routing` | スキル起動痕跡を遡る秒数 |
+| `CLAUDE_KNOWLEDGE_DIR` | `~/knowledge` | `log-knowledge-read` | 読み取りを記録するナレッジ置き場 |
+
+いずれも未設定時は既定値で従来どおり動作する（後方互換）。
+
 ## bootstrap-env.sh の注意点
 
-- macOS 前提（`stat -f %m`、`md5`、`/opt/homebrew/bin/jq` フォールバック）
-- Linux で使う場合は `stat -c %Y` / `md5sum` への置換が必要
-- キャッシュ先: `~/.claude/cache/bootstrap/<md5(cwd)>.md`、24時間有効
+- GNU/BSD 差（`stat` / `md5`）は lib が吸収するため macOS / Linux 双方で動く。jq は `command -v jq` で解決し、jq 不在時は環境情報生成をスキップして正常終了する（`/opt/homebrew` 等の絶対パス直書きはしない）
+- キャッシュ先: `${FSTACK_CACHE_DIR:-~/.claude/cache/bootstrap}/<md5(cwd)>.md`、24時間有効
+- lib を解決できない環境（コピー運用で lib 未同梱等）ではキャッシュ鍵を計算できないため、キャッシュを使わず毎回生成にフォールバックする（出力内容は従来どおり、`exit 0`）
 - 強制再生成: `bash hooks/bootstrap-env.sh --force < <(echo '{"cwd":"'$PWD'"}')`
 
 ## check-implementation-routing.sh の注意点
 
-- macOS 前提（`date -j -f` で skills.log のタイムスタンプを epoch 変換する）。Linux で使う場合は `date -d` への置換が必要
+- skills.log のタイムスタンプ→epoch 変換は lib（`date -j -f` / `date -d` を feature-detect）が吸収するため macOS / Linux 双方で動く
+- 遡る時間窓は `FSTACK_ROUTING_WINDOW_SEC`（既定 1800 秒 = 30分）で調整できる
 - `skills.log` が存在しない環境では何もせず正常終了する（reminder を出すには `skill-log.sh` 等でスキル起動を記録している前提）
-- blocking しない reminder のみ。極小スコープ（typo・1行修正）の編集では無視して続行可能
+- 非ブロッキング advisory。lib/jq 解決失敗時は reminder を諦めて `exit 0` で継続する（極小スコープの編集でも無視して続行可能）
 
 ## log-knowledge-read.sh の注意点
 
 - 記録対象パスは環境変数 `CLAUDE_KNOWLEDGE_DIR` で指定する（未設定時のデフォルトは `~/knowledge`）。自分のナレッジ置き場に合わせて設定する
 - 対象外パスの Read は何も記録せず正常終了する
-- ログ先: `~/.claude/logs/knowledge.log`（`[YYYY-MM-DD HH:MM:SS] [KNOWLEDGE] READ <basename>` 形式）
+- ログ先: `${FSTACK_LOG_DIR:-~/.claude/logs}/knowledge.log`（`[YYYY-MM-DD HH:MM:SS] [KNOWLEDGE] READ <basename>` 形式）。lib/jq 解決失敗時は記録せず `exit 0`
 
 ## mask 系 hook の注意点
 

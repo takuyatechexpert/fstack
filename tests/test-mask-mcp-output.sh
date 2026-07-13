@@ -34,6 +34,8 @@ make_sandbox() {
   mkdir -p "$HOOKSBOX"
   cp "$HOOKS_DIR/mask-mcp-output.sh" "$HOOKSBOX/mask-mcp-output.sh"
   chmod +x "$HOOKSBOX/mask-mcp-output.sh"
+  # lib/common.sh を同梱（実デプロイ構成の再現。単体コピーだと lib 解決失敗で秘匿に落ちる）
+  mkdir -p "$HOOKSBOX/lib" && cp "$HOOKS_DIR/lib/common.sh" "$HOOKSBOX/lib/common.sh"
   if [ "$1" = "yes" ]; then
     cp "$HOOKS_DIR/mask-secrets.sh" "$HOOKSBOX/mask-secrets.sh"
     chmod +x "$HOOKSBOX/mask-secrets.sh"
@@ -47,6 +49,8 @@ make_sandbox_failmasker() {
   mkdir -p "$HOOKSBOX"
   cp "$HOOKS_DIR/mask-mcp-output.sh" "$HOOKSBOX/mask-mcp-output.sh"
   chmod +x "$HOOKSBOX/mask-mcp-output.sh"
+  # lib/common.sh を同梱（masker 失敗の検証意図が lib 不在で崩れないようにする）
+  mkdir -p "$HOOKSBOX/lib" && cp "$HOOKS_DIR/lib/common.sh" "$HOOKSBOX/lib/common.sh"
   printf '#!/bin/bash\ncat >/dev/null\nexit 1\n' > "$HOOKSBOX/mask-secrets.sh"
   chmod +x "$HOOKSBOX/mask-secrets.sh"
 }

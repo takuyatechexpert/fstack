@@ -106,7 +106,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | `skill-log.sh` | スキル使用ログを `~/.claude/logs/skills.log` に追記する簡易ユーティリティ |
 | `log-knowledge-read.sh` | `CLAUDE_KNOWLEDGE_DIR`（デフォルト `~/knowledge`）配下の Read を `~/.claude/logs/knowledge.log` に記録 |
 
-詳細・設定例は [hooks/README.md](hooks/README.md) を参照。
+ログ先・キャッシュ先・reminder 時間窓などは環境変数（`FSTACK_LOG_DIR` / `FSTACK_CACHE_DIR` / `FSTACK_ROUTING_WINDOW_SEC` / `CLAUDE_KNOWLEDGE_DIR`）で上書きできます。詳細・設定例・共通ライブラリの公開契約は [hooks/README.md](hooks/README.md) を参照。
 
 ## ドキュメント
 
