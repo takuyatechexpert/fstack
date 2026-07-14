@@ -49,6 +49,12 @@ BUILTIN_TOOLS = {
     "WebFetch", "WebSearch", "Agent", "Skill", "NotebookEdit",
 }
 
+# tools に書くと MCP ツール群全体を許可する、公知の MCP サーバー名。
+# ここに無い名前は W006 で警告する（タイプミス検出のため）。プロジェクト固有の MCP を使う場合は追記する。
+KNOWN_MCP_SERVERS = {
+    "chrome-devtools", "github", "slack", "playwright", "sentry", "postgres",
+}
+
 # Agent(name1, name2) パターン
 AGENT_TOOL_PATTERN = re.compile(r"^Agent\([\w, -]+\)$")
 
@@ -213,8 +219,10 @@ def lint(filepath: str) -> list[Issue]:
                 # Agent(name) パターンは特別扱い
                 if AGENT_TOOL_PATTERN.match(tool):
                     continue
+                # 既知の MCP サーバー名は MCP ツール群全体の許可指定として正当
+                if tool in KNOWN_MCP_SERVERS:
+                    continue
                 if tool not in BUILTIN_TOOLS:
-                    # MCP サーバー名の可能性があるので INFO レベル
                     issues.append(Issue(warn_code, "WARN",
                         f"`{field_name}` に未知のツール名 `{tool}` があります "
                         f"(組み込みツール名か MCP サーバー名を確認してください)"))
