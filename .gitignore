@@ -8,3 +8,7 @@ hooks/lint/config.json
 
 # ローカル worktree（セッション作業用）
 .claude/worktrees/
+
+# Python バイトコードキャッシュ（lint-agent.py の py_compile 副産物）
+__pycache__/
+*.pyc
