@@ -1,209 +1,156 @@
 ---
 name: crystallize
-description: "経験の結晶化とナレッジ蒸留スキル。ログと記憶から繰り返すパターンをmemory・skills・ナレッジベースに昇華し、蒸留済みメモリは削除してクリーンに保つ。週次の振り返り・マルチマシン同期に使用。「結晶化」「crystallize」「振り返り」「週次レビュー」「知識の棚卸し」「蒸留」「distill」「ナレッジ同期」で使用する。以下では起動しない: セッション引き継ぎ（handover）。"
+description: "経験の結晶化とナレッジ蒸留スキル。ログと memory を分析し、繰り返すパターンを memory・skills・ナレッジベースに昇華させ、蒸留済み・陳腐化したメモリを退避してクリーンに保つ。週次の振り返りに使用する。ユーザーが「結晶化」「crystallize」「振り返り」「週次レビュー」「知識の棚卸し」「記憶の棚卸し」「memoryを整理して」「蒸留」「distill」「ナレッジ同期」「ナレッジに昇華」と言ったときに使用する。以下では起動しない: セッション引き継ぎ（handover が担当）、スキル自体の棚卸し・改善（skill-auditor が担当）。"
 ---
 
 # Crystallize（結晶化・蒸留）
 
-ログと記憶を分析し、繰り返すパターンを memory・skills・ナレッジベースに昇華させるワークフロー。
-蒸留済みメモリは元の `~/.claude/projects/*/memory/` から削除してクリーンに保つ。
+ログと記憶を分析し、繰り返すパターンを memory・skills・ナレッジベースに昇華させるワークフロー。蒸留済み・陳腐化したメモリは `~/.claude/projects/*/memory/` から退避してクリーンに保つ。
+
+## 参照ファイル
+
+必要になった時点で Read で最新内容を読み込む（要約・記憶からの再現は禁止）。
+
+| ファイル | 読むタイミング |
+|---|---|
+| `~/.claude/skills/crystallize/references/report-format.md` | Phase 3 のレポート出力前（必須） |
+| `~/.claude/skills/crystallize/references/nfd-architecture.md` | 配置先（憲法層/技能層/経験層）の判断に迷ったとき |
 
 ## ナレッジベース
 
-```
-~/.claude/knowledge/
-├── KNOWLEDGE.md              # インデックス
-├── user-profile.md           # ユーザー属性・役割          [常時読み込み]
-├── work-patterns.md          # 働き方・フィードバック      [常時読み込み]
-├── collaboration.md          # Claude との協業スタイル     [常時読み込み]
-├── tech-decisions.md         # 技術判断の蓄積             [遅延読み込み]
-└── project-context.md        # プロジェクト横断の文脈      [遅延読み込み]
-```
+場所は `~/.claude/knowledge/`。ファイル構成は `KNOWLEDGE.md`（インデックス）を SSOT とし、実行時に Read して現構成を把握する（スキル側にファイル名を固定列挙すると実態とドリフトするため）。
 
-**サイズ制限:** 常時3ファイル120行 + 遅延2ファイル80行 = 合計200行以内
+**サイズ規律:**
+
+- 常時読み込み3ファイル（user-profile / work-patterns / collaboration）: 合計 120 行以内
+- 遅延読み込み: 1ファイル 100 行以内（ファイル数は KNOWLEDGE.md で管理）
+- 超過しそうな場合は追記より先に、既存エントリの圧縮・淘汰を提案する
+
+## 受け入れ基準（1回の実行で守ること）
+
+- 作成・更新・skills 追記は合計 5 件まで。淘汰（退避）のみ 20 件まで可（バックログ解消を優先）
+- 削除は直接の `rm` を避け、`rules/file-operations.md` に従って退避する（git rm / システムのゴミ箱 / 退避ディレクトリへの mv）
+- 昇格・淘汰したメモリは `MEMORY.md` インデックスからも除去する
+- ナレッジには環境非依存の表現を書く（ハードコードパスはプレースホルダ化）。プロジェクトの「今」の情報（期限・未完タスク等）は memory 側に留める
+- ファイル変更（memory 作成・更新・退避、ナレッジ追記、skills 追記）はすべて Phase 4 のユーザー確認後に実行する
+- 変更はステージまでで止め、`commit` / `push` はユーザーに委ねる
 
 ## ワークフロー
 
-### Phase 0: 開始時刻記録
+### Phase 1: 収集・分析（サブエージェント並列委譲）
+
+ログ（1〜4MB）と memory（100件超）はメインコンテキストで直接 Read しない。以下のサブエージェント（general-purpose）を**同一メッセージ内で並列起動**し、構造化サマリだけを受け取る。各エージェントには意図・対象パス・抽出コマンド・返却形式を明示して渡す。
+
+#### 1-A. ログ分析エージェント（1体）
+
+**渡すもの**: 下記コマンド、返却形式。
 
 ```bash
-START_TIME=$(date +%s)
+SINCE=$(date -v-7d +%Y-%m-%d)
+for f in skills.log tool-failures.log prompts.log; do
+  echo "=== $f ==="
+  awk -v s="$SINCE" '/^\[20[0-9][0-9]-/{cur=substr($0,2,10)} cur>=s' ~/.claude/logs/$f
+done
 ```
 
-### Phase 1: ログ収集
+（タイムスタンプ行で現在日付を更新する awk なので、prompts.log の複数行エントリも正しく拾える。ログは追記型で直近分は末尾にある）
 
-以下のログファイルを Read で読み込む（存在するもののみ）。
+**返却形式**: ①繰り返しパターン候補（同一エラー2回以上・同種の修正指示・繰り返された判断） ②件数サマリ（スキル実行 / エラー / プロンプト）
 
-| # | ファイル | 内容 |
-|---|---|---|
-| 1 | `~/.claude/logs/skills.log` | スキル操作ログ |
-| 2 | `~/.claude/logs/tool-failures.log` | ツール実行失敗ログ |
-| 3 | `~/.claude/logs/prompts.log` | ユーザープロンプトログ |
+#### 1-B. memory 棚卸しエージェント（1〜3体）
 
-**対象期間**: 直近7日間のエントリ（タイムスタンプで判定）。
-ファイルが存在しない場合は「ログファイルなし」として Phase 2 へ進む。
-
-### Phase 2: 既存 memory + ナレッジの確認
-
-#### 2-1. プロジェクトメモリの収集
+まず件数を把握し、60件以下なら1体、超えるならプロジェクト dir 単位で分割して最大3体に委譲する。
 
 ```bash
-find ~/.claude/projects/ -path "*/memory/*.md" -name "*.md" ! -name "MEMORY.md"
+find ~/.claude/projects/ -path "*/memory/*.md" ! -name "MEMORY.md" | wc -l
 ```
 
-各ファイルを Read し、frontmatter（name, type, description）を解析する。
+**渡すもの**: 担当ファイル一覧、frontmatter の読み方、返却形式。
 
-#### 2-2. 既存ナレッジの確認
+- frontmatter の type は top-level `type:` と `metadata.type` の**両形式が実在する**ため両対応で読む
+- 現在の `$HOME` と一致しないパス形式のプロジェクト dir（旧ユーザー名由来のパス形式等）は**旧環境フラグ**を付ける（昇格・淘汰の優先候補）
 
-`~/.claude/knowledge/*.md` を Read し、現在のナレッジ内容と行数を把握する。
+**返却形式**: `| パス | name | type | 要旨(1行) | 旧環境 | 提案(維持/昇格/更新/淘汰) |` のテーブル
 
-### Phase 3: パターン抽出・分析
+#### 1-C. メインで直接 Read するもの（小さいファイルのみ）
 
-#### 3-1. 新規パターンの発見
+`~/.claude/knowledge/KNOWLEDGE.md` と、そこに列挙された各ナレッジファイル（合計300行程度）。
 
-ログから繰り返し現れるパターンを抽出する:
+### Phase 2: 結晶化判定
 
-- **同じエラーが2回以上発生** → feedback memory 候補
-- **同じ種類の修正指示が繰り返し** → feedback memory 候補
-- **特定の判断が複数回行われた** → feedback memory 候補
-
-#### 3-2. 既存 memory の評価
-
-各 memory ファイルについて:
-
-- **まだ有効か？** — プロジェクトの状況が変わっていないか
-- **適用実績は？** — ログ内で実際に活用された形跡があるか
-- **昇華候補か？** — 1ヶ月以上安定して適用されているルールは skills/ への移植を検討
-- **ナレッジ昇格候補か？** — プロジェクト横断で汎用的な知識は `~/.claude/knowledge/` への蒸留を検討
-
-#### 3-3. 結晶化の判断基準
+Phase 1 の返却を突合し、各候補の段階を判定する。
 
 | 段階 | 条件 | アクション |
 |---|---|---|
-| 観察 | 初回の気づき | レポートに記載のみ（memory には入れない） |
-| 記憶化 | 2回以上発生 or ユーザーが明示 | `memory/feedback_*.md` に作成 |
-| ナレッジ昇格 | プロジェクト横断で汎用的 | `~/.claude/knowledge/` に蒸留。元の memory は削除 |
+| 観察 | 初回の気づき | レポート記載のみ（memory には入れない） |
+| 記憶化 | 2回以上発生 or ユーザーが明示 | memory を作成 |
+| ナレッジ昇格 | プロジェクト横断で汎用的 | ナレッジへ蒸留し、元 memory は退避 |
 | 結晶化 | 1ヶ月以上安定 | `skills/*/references/` に移植 |
-| 淘汰 | 陳腐化・不要 | memory ファイルを削除 |
+| 淘汰 | 陳腐化・不要 | `rules/file-operations.md` に従って退避 |
 
-#### 3-4. ナレッジ蒸留のマッピング
-
-メモリの type と内容に基づき、出力先ナレッジファイルを決定する:
+**type → ナレッジファイル対応**（昇格時の出力先）
 
 | メモリ type | 内容 | 出力先 |
-|------------|------|--------|
-| `user` | 役割・専門性 | `user-profile.md` |
-| `user` | Claude との好み | `collaboration.md` |
-| `feedback` | 働き方・習慣 | `work-patterns.md` |
-| `feedback` | Claude への指示 | `collaboration.md` |
-| `feedback` | 技術的判断 | `tech-decisions.md` |
-| `project` | プロジェクト文脈 | `project-context.md` |
-| `reference` | 外部システム参照 | `project-context.md` |
-
-**蒸留ルール:**
-1. 環境非依存化 — パス・ホスト名への参照を除去 or 汎用化
-2. 重複排除 — 同じ知識は統合し、最も詳しい記述を採用
-3. 鮮度優先 — 同トピックで新旧がある場合は新しい方を採用
-4. サイズ厳守 — 常時120行 + 遅延80行 = 200行以内
-
-### Phase 4: レポート出力
-
-```
-## 結晶化レポート（{YYYY-MM-DD}）
-
-### 分析期間
-{開始日} 〜 {終了日}
-
-### ログ概要
-- スキル実行: {N} 件 / エラー: {M} 件 / プロンプト: {K} 件
-
-### 新規パターン（記憶化候補）
-1. **{パターン名}** — {観察内容} → 提案: {memory 内容}
-
-### 既存 memory の評価
-| ファイル | 状態 | 提案 |
 |---|---|---|
-| `feedback_xxx.md` | 有効 | 維持 |
-| `project_yyy.md` | 陳腐化 | 削除 |
+| `user` | 役割・専門性 | user-profile.md |
+| `user` | Claude との好み | collaboration.md |
+| `feedback` | 働き方・習慣 | work-patterns.md |
+| `feedback` | Claude への指示 | collaboration.md |
+| `feedback` | 技術的判断 | tech-decisions.md |
+| `project` / `reference` | プロジェクト文脈・外部参照 | project-context.md ほか（KNOWLEDGE.md の現構成に従う） |
 
-### ナレッジ昇格候補
-| ファイル | プロジェクト | 出力先 | 理由 |
-|---|---|---|---|
-| `user_profile.md` | project-a, project-b | `user-profile.md` | 複数プロジェクトで重複 |
+**蒸留ルール**: ①環境非依存化 ②重複排除（最も詳しい記述に統合） ③鮮度優先 ④サイズ規律遵守
 
-### ナレッジ サイズ見積もり
-| 区分 | 現在 | 追加後 | 上限 |
-|---|---|---|---|
-| 常時 | {n}行 | {n+x}行 | 120行 |
-| 遅延 | {m}行 | {m+y}行 | 80行 |
+### Phase 3: レポート出力
 
-### 結晶化候補（skills への昇華）
-1. **{ルール名}** — 対象: `skills/{name}/` / 内容: {追記するルール}
+`references/report-format.md` を Read し、そのフォーマットで出力する（フォーマットを発明しない）。
 
-### 淘汰候補
-- `memory/{file}.md` — 理由: {陳腐化の理由}
+### Phase 4: ユーザー確認 → アクション実行
+
+report-format.md の確認フォーマットを提示し、承認された項目のみ実行する:
+
+- **memory 作成/更新** — frontmatter 付き md を作成・Edit し、`MEMORY.md` にポインタを追記/更新する
+- **淘汰** — `rules/file-operations.md` に従って退避し（git rm / システムのゴミ箱 / 退避ディレクトリへの mv）、`MEMORY.md` からも除去する
+- **skills への追記** — 対象スキルの `references/` または SKILL.md に追記する。既存構造を尊重する
+- **ナレッジ昇格** — 環境非依存に書き換えて追記 → `KNOWLEDGE.md` 更新 → サイズ規律確認 → 元 memory を退避し `MEMORY.md` からも除去（複数プロジェクトに同内容があれば全て）
+
+### Phase 5: セルフ検証
+
+```bash
+bash ~/.claude/skills/crystallize/scripts/verify-integrity.sh
 ```
 
-### Phase 5: アクション実行
+サイズ規律・インデックス整合性（MEMORY.md / KNOWLEDGE.md ⇄ 実ファイルの双方向）を機械判定する。ナレッジの場所が既定（`~/.claude/knowledge/`）と異なる場合は環境変数 `KNOWLEDGE_DIR` または第1引数で渡す。✗ が出たら該当箇所を修正してから完了とする。
 
-レポート表示後、ユーザーに確認する:
+## ログ記録
 
-```
-以下のアクションを実行しますか？
-  1. 新規 memory の作成（{N} 件）
-  2. 既存 memory の更新（{M} 件）
-  3. 陳腐化 memory の削除（{K} 件）
-  4. skills への追記（{L} 件）
-  5. ナレッジへの昇格（{P} 件）— 元の memory は削除
-（y: 全実行 / 番号指定: 個別実行 / n: スキップ）
-```
+起動ログは PostToolUse (Skill) hook が自動記録する。完了時に分岐タグで記録する:
 
-**ユーザー確認後に実行する内容:**
+- 変更実行: `~/.claude/hooks/skill-log.sh crystallize COMPLETED "memory:+{N}/-{M} knowledge:+{P} skills:+{Q}"`
+- 変更提案なし: `~/.claude/hooks/skill-log.sh crystallize NO_CHANGES "分析のみ・候補なし"`
+- 全スキップ: `~/.claude/hooks/skill-log.sh crystallize SKIPPED_BY_USER "候補{N}件"`
+- エラー: `~/.claude/hooks/skill-log.sh crystallize ERROR "{内容}"`
 
-#### 新規 memory の作成
+## Pitfalls（実事故ベース）
 
-frontmatter 付き md を作成し、`MEMORY.md` にポインタを追記する。
+### 1. ナレッジのパスを記憶で書かない
 
-#### 既存 memory の更新
+**症状**: スキル内にハードコードされた誤ったパスへ knowledge が新規作成されうる。環境移行でディレクトリが移動してもスキル内のハードコードパスは追従しない。
 
-Edit で更新し、Why / How to apply を最新化する。
+**Why**: 退避用など別用途のディレクトリが実在すると、誤パスへの書き込みが成功してしまい気づけない。
 
-#### 陳腐化 memory の削除
+**ルール**: 書き込み前に対象ディレクトリの実在と KNOWLEDGE.md の存在を確認する。無ければ作成せず、ユーザーに正しいパスを確認する。
 
-ファイルを削除し、`MEMORY.md` からもエントリを除去する。
+### 2. 巨大ログを Read ツールで読まない
 
-#### skills への追記
+**症状**: ログを「並列 Read」で取ると、skills.log 等は 1〜4MB あり Read は先頭約2000行で打ち切られるため**直近分（ファイル末尾）に一切届かない**まま分析完了に見えてしまう。
 
-対象スキルの `references/` または `SKILL.md` に追記する。
+**Why**: ログは追記型で新しいエントリほど末尾にある。Read は先頭から読む。
 
-#### ナレッジへの昇格
+**ルール**: ログは必ず Bash の日付窓抽出（Phase 1-A のコマンド）で取得する。抽出結果が数百行を超えるなら分析ごとサブエージェントに委譲する。
 
-1. 対象メモリの内容を適切なナレッジファイルに追記（環境非依存に書き換え）
-2. `KNOWLEDGE.md` インデックスを更新
-3. サイズ制限を確認（超過時は優先度の低いエントリの除去を提案）
-4. **元の memory ファイルを削除**し、`MEMORY.md` からも除去
-5. 複数プロジェクトに同じメモリがある場合は全て削除
+## オペレーション原則
 
-`project-context.md` はプロジェクト名でセクション分割する:
-
-```markdown
-## my-webapp
-フルスタック Web アプリケーション。React + Node.js 構成...
-
-## api-server
-REST API サーバー。Go + PostgreSQL 構成...
-```
-
-## 落とし穴
-
-- ナレッジファイルにハードコードされたパス（`/Users/xxx/`）が混入しやすい。蒸留時に必ず汎用化する
-- `project-context.md` に期限切れのマイルストーン情報を蒸留しない。プロジェクトの「今」ではなく「構造」を記録する
-- サイズ制限を超えたまま蒸留すると、CLAUDE.md 経由のコンテキスト消費が増え続ける。必ず Phase 4 で見積もりを出す
-
-## 注意事項
-
-- ログファイルが存在しない場合でも、既存 memory の評価（Phase 3-2）は実施する
-- memory の作成・更新・削除は必ずユーザー確認後に実行する
-- skills への追記は対象スキルの設計方針を尊重し、既存の構造を壊さない
-- 1回の結晶化で大量の変更を行わない（最大 5件/回 を目安）
-- ナレッジ蒸留後の commit/push はユーザーに委ねる（自動 push しない）
+- ファイル変更はユーザー確認ゲート（Phase 4）を経由してのみ実行する
+- ログファイルが存在しなくても memory 棚卸し（1-B）は実施する
+- skills への追記は対象スキルの設計方針を尊重し、既存構造を保つ
