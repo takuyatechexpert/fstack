@@ -44,8 +44,10 @@ Agent tool で `general-purpose` agent type を spawn し、以下を `prompt` �
 - 例（Go）: `go test ./...` → `go vet ./...`
 - 全て pass するまでループ。pass しないコードは報告しない
 
-### 6. LSP diagnostics 確認
-- 編集したファイルについて LSP の diagnostics を確認し、エラーを残さない
+### 6. 静的診断の確認
+- 編集したファイルの diagnostics を確認し、エラーを残さない
+- LSP ツールは deferred（未ロード）の場合がある。使うときは ToolSearch で `select:LSP` 等を先に取得してから呼ぶ
+- LSP が使えない環境では、コンパイラ / 型チェッカ / リンタで代替する（例: `tsc --noEmit` / `phpstan` / `mypy` / `go vet`）
 
 ## 禁止事項
 
@@ -95,4 +97,4 @@ Agent tool で `general-purpose` agent type を spawn し、以下を `prompt` �
 
 ## 注意
 
-不明点は実装を進める前に Phase 2 の受け入れ基準を再読する。それでも判断つかない場合のみ、メインエージェント（呼び出し元）に SendMessage で確認する。
+不明点は実装を進める前に Phase 2 の受け入れ基準を再読する。それでも判断がつかない場合は、**勝手に仮定して実装を進めず、報告フォーマットの末尾に `### 要確認事項` セクションを設けて論点を明記し、その時点の状態で返す**。Task 型サブエージェントは親へ途中連絡できないため、メインエージェントがその報告を読んで判断し、必要なら受け入れ基準を補足して再 spawn する。

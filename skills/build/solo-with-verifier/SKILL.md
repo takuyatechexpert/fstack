@@ -1,6 +1,6 @@
 ---
 name: solo-with-verifier
-description: "Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、1〜3ファイル・1〜3タスクの小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったとき、またはコード変更を伴う依頼を受けたときに使用する。以下では起動しない: 5タスク以上・複数モジュール横断の中〜大規模実装（orchestra-of-agents）、実装着手前の設計・計画書化のみ（build-planner）、typo/1行修正/コメント変更のみの極小スコープ、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
+description: "Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、1〜3ファイル・1〜3タスクの小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。**MUST: Edit/Write/NotebookEdit を伴う実装系の依頼を受けたら、typo・1行修正・コメント変更のみの極小スコープ以外はすべて本スキルを起動すること。「コピペ流用だから」「他リポジトリの実装をなぞるだけだから」「自分でやった方が早い」のような理由で直接実装に逃げない。** ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったとき、またはコード変更を伴う依頼を受けたときに使用する。以下では起動しない: 5タスク以上・複数モジュール横断の中〜大規模実装（orchestra-of-agents）、実装着手前の設計・計画書化のみ（build-planner）、typo/1行修正/コメント変更のみの極小スコープ、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
 ---
 
 # solo-with-verifier
@@ -20,7 +20,7 @@ Implementer と Verifier の2エージェントを反復させ、小〜中規模
 
 ## 参照ファイル（毎回 Read で読み込む）
 
-スキル起動時に **同一メッセージ内で以下を並列 Read** する。要約・メモリからの再現禁止。サブエージェント spawn 時はファイルパスを渡し、サブエージェント自身に Read させる。
+スキル起動時に **同一メッセージ内で以下を並列 Read** する。要約・メモリからの再現禁止。サブエージェント spawn 時は、参照表記の `${CLAUDE_SKILL_DIR}` を**展開済みの絶対パスに解決してから渡し**、サブエージェント自身に Read させる（サブエージェント側では環境変数が未定義になり Read が失敗するため）。
 
 - **Implementer プロンプト**: `${CLAUDE_SKILL_DIR}/references/implementer-prompt.md`
 - **Verifier プロンプト**: `${CLAUDE_SKILL_DIR}/references/verifier-prompt.md`
@@ -54,42 +54,21 @@ Implementer と Verifier の2エージェントを反復させ、小〜中規模
 
 **実行ごとのユニーク run ディレクトリ**を生成し、その中の `acceptance.md` にテンプレートを保存する。固定パスを使うと、複数の solo-with-verifier 実行（特に別セッションでの同時並行）が同一ファイルを上書きし合い、別タスクの基準を読む競合が起きるため、必ず `mktemp -d` でユニーク化する。
 
+保存先は、ハーネスが scratchpad ディレクトリを提示していればその配下を優先し（権限プロンプト不要）、無ければ `/tmp` 配下に作る。
+
 ```bash
-mkdir -p /tmp/solo-with-verifier
-RUNDIR=$(mktemp -d /tmp/solo-with-verifier/run.XXXXXX)
+# scratchpad を提示するハーネスではそこを、無ければ /tmp を基点にする
+BASE="${CLAUDE_SCRATCHPAD_DIR:-/tmp/solo-with-verifier}"
+mkdir -p "$BASE"
+RUNDIR=$(mktemp -d "$BASE/run.XXXXXX")
 # 受け入れ基準テンプレートを "$RUNDIR/acceptance.md" に保存する
 ```
 
 ここで決まった **`$RUNDIR/acceptance.md` のパスを、後続の Phase 3 / 4 / 5 で受け入れ基準ファイルとして使う**（サブエージェントには毎回このパスを明示的に渡す）。
 
-> **後始末**: run ディレクトリは `/tmp` 配下のスクラッチで OS 再起動時に消えるため、明示削除は不要。
+> **後始末**: run ディレクトリはスクラッチ領域（scratchpad / `/tmp`）に作るため明示削除はしない。`rm`/`rmdir` はフックでブロックされるので後始末に使わない。
 
-```markdown
-## 受け入れ基準（Phase 2 で確定）
-
-### 1. 意図
-{何を達成したいか。ビジネス目的・ユーザー価値を1〜3行で}
-
-### 2. 制約
-{使ってよい技術・守るべき規約・触ってはいけない範囲}
-
-### 3. 受け入れ基準
-{完了と判断する条件をチェックリスト形式で}
-- [ ] {基準1}
-- [ ] {基準2}
-
-### 4. 関連ファイル（path:line 形式）
-- {path/to/file.ext:LL}
-
-### 5. 検証手段
-{rules/testing.md の検証手段テーブルから該当コマンドを抜粋}
-- 例: `make test` → `make lint`
-
-### スコープ外（Verifier への指示）
-{今回触らない範囲・別チケット扱いにする項目}
-```
-
-#### Why: Verifier の脱線（スコープ外の指摘）を防ぐため、**何が「完了」かを明示的に固定する**。曖昧なまま走らせると、Verifier は新規変更以外のリファクタ要求まで指摘して修正ループが空転する。
+テンプレートの中身（5点セット + スコープ外 + その Why）は `references/acceptance-template.md` を Read し、`$RUNDIR/acceptance.md` に書き込む。スコープ外を明示するのは、Verifier が新規変更以外のリファクタ要求まで指摘して修正ループが空転するのを防ぐため。
 
 ### Phase 3: Implementer 実行
 
@@ -104,19 +83,11 @@ Agent tool で `general-purpose` サブエージェントを spawn し、`refere
 
 ### Phase 4: Verifier 実行
 
-Agent tool で `general-purpose` サブエージェントを別途 spawn し、`references/verifier-prompt.md` のパスと **Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**（受け入れ基準）＋Phase 3 の実装差分（変更ファイル一覧）を明示的に渡す（固定パスを前提にしない）。
+Agent tool で `general-purpose` サブエージェントを別途 spawn し、`references/verifier-prompt.md`（「参照ファイル」節の絶対パス）＋**Phase 2 で生成した `$RUNDIR/acceptance.md` のパス**（受け入れ基準）＋Phase 3 の変更ファイル一覧を明示的に渡す（固定パスを前提にしない）。
 
-**Verifier の責務（4観点）:**
-1. **仕様適合**: Phase 2 の受け入れ基準を満たしているか
-2. **テスト品質**: テストが仕様を表現しているか（実装に追従しているだけでないか）
-3. **rules遵守**: `references/rules-checklist.md` 記載の rules配下違反チェック
-4. **検証コマンド再実行**: Implementer のセルフ実行とは独立に、自分で再実行して結果を確認
+**Verifier の責務（4観点）:** ① 仕様適合（受け入れ基準を満たすか）② テスト品質（実装追従でないか）③ rules 遵守（`references/rules-checklist.md`）④ 検証コマンドの独立再実行。各観点に**具体的根拠**（実行コマンド・参照行・引用）が揃えば `OK`、1つでも指摘ありか根拠が薄ければ `needs_fix`（判定詳細は `verifier-prompt.md`）。
 
-**判定基準:**
-- 全観点 OK かつ各観点に**具体的根拠**（実行コマンド・参照行・引用）あり → `OK`
-- 1つでも具体的指摘あり、または根拠が薄い → `needs_fix`
-
-#### Why: 「特に問題なし」のような甘い指摘での早期OKを防ぐため、4観点それぞれで根拠を求める。
+#### Why: 「特に問題なし」のような甘い早期 OK を防ぐため、4観点それぞれで根拠を求める。
 
 ### Phase 5: ループ判定
 
@@ -132,36 +103,13 @@ Agent tool で `general-purpose` サブエージェントを別途 spawn し、`
 
 ### Phase 6: 完了ログ記録
 
-`~/.claude/hooks/skill-log.sh solo-with-verifier <TAG> "<message>"` で記録:
-
-- `SCOPE_OK` "{task-slug} files={N} tasks={N}"
-- `IMPL_DONE` "{task-slug} iter={N} {elapsed}s"
-- `VERIFY` "{task-slug} iter={N} result={ok|needs_fix}"
-- `END` "{task-slug} iter={N} {total_elapsed}s"
-- `ESCALATE_SCOPE` "{task-slug} reason=phase1_oversize"
-- `ESCALATE_LOOP` "{task-slug} reason=verifier_fail_3x"
-- `ERROR` "{内容}"
-
-実行時間は Phase 1 開始時に `date +%s` で取得した値から計算する。
-
-> **Note:** スキル起動ログは PostToolUse (Skill) hook が自動記録するため、START ログは不要。
+`references/log-tags.md` のタグ表に従い `~/.claude/hooks/skill-log.sh solo-with-verifier <TAG> "<message>"` で記録する（実行時間は Phase 1 開始時の `date +%s` から算出）。
 
 ---
 
 ## 出力フォーマット（最終レポート）
 
-```markdown
-## solo-with-verifier 完了レポート
-### スコープ: 変更ファイル {N}件 / タスク {N}件 / 反復 {N}/3
-### 受け入れ基準達成: [x] 基準1 / [x] 基準2 ...
-### Implementer サマリ
-- 変更ファイル: {file_path:line ...}
-- RED 確認: {テスト初回失敗ログ引用}
-- 検証コマンド: {make test / make lint / ...}
-### Verifier サマリ（4観点・各観点に根拠必須）
-1. 仕様適合 / 2. テスト品質 / 3. rules遵守 / 4. 検証コマンド再実行
-### 残課題（スコープ外・非ブロッキング指摘）
-```
+Phase 5 で OK 判定に達したら、`references/report-format.md` の型で完了レポートを出力する。
 
 ---
 

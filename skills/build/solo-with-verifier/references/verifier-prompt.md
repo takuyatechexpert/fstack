@@ -13,7 +13,7 @@ Implementer の成果物を **4観点** で独立に検証し、各観点に **�
 ## 受け取る情報
 - 受け入れ基準ファイル: **メインエージェントから spawn 時に渡された受け入れ基準ファイルのパス**（`<acceptance_path>`。実行ごとのユニーク run ディレクトリ内の `acceptance.md`）。5点セット + スコープ外指定を含む
 - Implementer 報告（変更ファイル一覧・RED 確認・実行コマンド結果）
-- rules チェックリスト: `${CLAUDE_SKILL_DIR}/references/rules-checklist.md`
+- rules チェックリスト: メインから渡された**展開済み絶対パス**（参照表記は `${CLAUDE_SKILL_DIR}/references/rules-checklist.md`。サブエージェント側では環境変数が未定義のため、メインが展開済みの絶対パスに解決して渡す）
 - 反復回数: 1〜3 のいずれか
 
 ## 必読
@@ -21,7 +21,7 @@ Implementer の成果物を **4観点** で独立に検証し、各観点に **�
 開始前に以下をすべて Read する（要約・推測禁止）:
 
 1. spawn 時に渡された受け入れ基準ファイルのパス（`<acceptance_path>`）
-2. `${CLAUDE_SKILL_DIR}/references/rules-checklist.md`
+2. rules チェックリスト（メインから渡された展開済み絶対パス。参照表記は `${CLAUDE_SKILL_DIR}/references/rules-checklist.md`）
 3. Implementer が変更した各ファイル（変更箇所のみでなく該当ファイル全体）
 4. テストファイル（Implementer が追加・変更したもの）
 
@@ -51,7 +51,7 @@ Implementer の成果物を **4観点** で独立に検証し、各観点に **�
   - 列挙定数・ホワイトリストを扱う場合、各要素について個別テストがあるか（`rules/testing.md` のホワイトリスト網羅ルール）
   - `#[TestDox()]` / `#[CoversClass()]` / `#[DataProvider()]` などプロジェクト標準のアトリビュートが使われているか（PHPUnit プロジェクトの場合）
   - 1テスト1アサーション原則
-  - モック方針との整合（DB は実 DB / 外部 API は fake / 時刻は Carbon）
+  - モック方針との整合（DB は実 DB / 外部 API はテストダブルで固定 / 時刻は固定化機構）
 - **テストを実装後に書き足した形跡**（コミットや diff の順序、テスト名が実装の関数名そのままなど）があれば `needs_fix`
 
 **根拠の形式**:
