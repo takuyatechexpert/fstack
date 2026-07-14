@@ -13,7 +13,9 @@ fstack/
 │   │   ├── handover/
 │   │   │   └── SKILL.md   # セッション引き継ぎスキル
 │   │   └── crystallize/
-│   │       └── SKILL.md   # ナレッジ蒸留スキル
+│   │       ├── SKILL.md   # ナレッジ蒸留スキル
+│   │       ├── references/   # report-format / nfd-architecture
+│   │       └── scripts/      # verify-integrity.sh
 │   ├── review/
 │   │   ├── review-pr/
 │   │   │   └── SKILL.md   # PR レビュースキル
@@ -64,9 +66,11 @@ fstack/
 │   ├── context-management.md
 │   ├── memory.md          # 4.7 Auto Memory 4種運用
 │   ├── plan-mode.md       # Plan Mode の発動基準・ワークフロー
+│   ├── document-writing.md # 人が読む文書の構成原則・取捨選択・発見可能性の担保
 │   └── file-operations.md # 破壊的操作の取扱い原則
 ├── agents/
-│   └── architect.md       # 読み取り専用の設計分析エージェント
+│   ├── architect.md       # 読み取り専用の設計分析エージェント
+│   └── db-schema-investigator.md  # 読み取り専用の DB スキーマ調査エージェント（create＋後続変更を追い実DBで裏取り）
 │                          # ※ eval 系エージェントは Anthropic 公式 skill-creator plugin を利用
 ├── hooks/                 # オプションの hook (opt-in)
 │   ├── validate-bash.sh           # 危険 Bash パターン検知

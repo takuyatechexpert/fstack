@@ -54,6 +54,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | context-management | セッション引き継ぎ、ツール使用方針（並列実行・委譲基準）、deferred tools / ToolSearch |
 | memory | Auto Memory（4.7構造化メモリ）の4種運用と crystallize との境界 |
 | plan-mode | Plan Mode の発動基準・ワークフロー・並列実装系スキルとの棲み分け |
+| document-writing | 人が読む文書（資料・議事録・PR説明・レポート）の構成原則、網羅より取捨選択、発見可能性の担保 |
 | file-operations | 破壊的操作の取扱い原則（コアエンジニア向け） |
 
 ## エージェント
@@ -61,6 +62,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | エージェント | 説明 |
 |-------------|------|
 | architect | 読み取り専用の設計分析エージェント。既存コードの構造分析、変更影響範囲の評価、実装方針の提案を行う（コード変更は一切しない） |
+| db-schema-investigator | 読み取り専用の DB スキーマ調査エージェント。テーブル定義・カラムの型/桁/制約を create だけでなく後続の変更まで追い、実 DB で裏取りして根拠付きで報告する（コード変更は一切しない） |
 
 ### Eval ワークフロー
 
