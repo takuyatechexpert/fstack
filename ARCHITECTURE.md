@@ -60,11 +60,11 @@ fstack/
 │   ├── design-principles.md
 │   ├── git-workflow.md
 │   ├── testing.md
-│   ├── implementation-flow.md  # 規模別スキル使い分け・単独実装の禁止
+│   ├── implementation-flow.md  # 規模別の進め方・スコープとテストの範囲・検証体制を足す判断
 │   ├── work-discipline.md  # バグ修正の3ステップなど作業規律
 │   ├── security.md
 │   ├── context-management.md
-│   ├── memory.md          # 4.7 Auto Memory 4種運用
+│   ├── memory.md          # Auto Memory 4種運用
 │   ├── plan-mode.md       # Plan Mode の発動基準・ワークフロー
 │   ├── document-writing.md # 人が読む文書の構成原則・取捨選択・発見可能性の担保
 │   └── file-operations.md # 破壊的操作の取扱い原則
@@ -82,7 +82,7 @@ fstack/
 │   ├── pre-compact-handover.sh    # 自動圧縮直前に handover 強制
 │   ├── post-compact-warning.sh    # 自動圧縮後に handover 強制
 │   ├── check-debug-code.sh        # JS/TS デバッグコード検出
-│   ├── check-implementation-routing.sh  # 実装前の solo/orchestra 起動を advisory 確認
+│   ├── check-implementation-routing.sh  # 変更ファイル数が 5 の倍数に達した編集で solo/orchestra の起動痕跡を advisory 確認
 │   ├── log-knowledge-read.sh      # ナレッジディレクトリ配下の Read をログ記録
 │   ├── pre-commit-lint.sh         # 多言語 lint dispatcher
 │   ├── lib/                       # hooks 共通ライブラリ
@@ -96,6 +96,7 @@ fstack/
 │   ├── skill-log.sh               # スキル使用ログ追記
 │   └── README.md                  # 設定方法・カスタマイズ手順
 ├── docs/
+│   ├── claude5-migration-guide.md # Opus 4.7 → Claude 5 系のプロンプト・スキル調整ガイド
 │   └── prompt-migration-guide.md  # モデルバージョンアップ時のプロンプト再調整ガイド
 └── templates/
     ├── CLAUDE.md.template              # グローバル CLAUDE.md テンプレート
@@ -160,6 +161,7 @@ description: 設計分析エージェント
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Agent
 model: inherit
+effort: high
 maxTurns: 30
 ---
 
@@ -169,7 +171,8 @@ maxTurns: 30
 主なフロントマターフィールド:
 - **tools** — エージェントが使用可能なツールのホワイトリスト（カンマ区切りの inline 記法）
 - **disallowedTools** — 明示的に禁止するツール（カンマ区切りの inline 記法）
-- **model** — 使用する Claude モデル（`inherit`, `sonnet`, `opus`, `haiku`）。`inherit` は呼び出し元の会話と同じモデルを使う
+- **model** — 使用する Claude モデル（`inherit`, `sonnet`, `opus`, `haiku`, `fable`）。`inherit` は呼び出し元の会話と同じモデルを使う
+- **effort** — そのエージェントが動く間のセッション effort を上書きする（`low` / `medium` / `high` / `xhigh` / `max`）。省略時の挙動は公式に明記がないため、効くものは明示する
 - **maxTurns** — エージェントの最大ターン数（暴走を防ぐ安全装置。設定推奨）
 
 ## シンボリックリンク戦略

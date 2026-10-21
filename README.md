@@ -48,11 +48,11 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 | design-principles | SRP, DRY, クリーンアーキテクチャ, DDD, TDD, 命名規則 |
 | git-workflow | コミットメッセージ規約、ブランチ戦略、PR テンプレート、コンフリクト対応 |
 | testing | TDD サイクル、カバレッジ目標、検証手段、テストケース設計、モック方針 |
-| implementation-flow | 実装タスクの規模別スキル使い分け（solo-with-verifier / orchestra-of-agents）、単独実装の禁止と例外条件 |
+| implementation-flow | 実装タスクの規模別の進め方（単独実装 / solo-with-verifier / orchestra-of-agents）、スコープとテストの範囲、検証体制を足す判断 |
 | work-discipline | バグ修正の3ステップ（現状修正→根本原因→再発防止）、横展開の徹底（grep で全箇所洗い出し）、変更前の確認（既存同種ファイル・既存コード検索・並行編集確認） |
 | security | シークレット管理、スキル開発時の認証情報ハンドリング、OWASP Top 10 |
-| context-management | セッション引き継ぎ、ツール使用方針（並列実行・委譲基準）、deferred tools / ToolSearch |
-| memory | Auto Memory（4.7構造化メモリ）の4種運用と crystallize との境界 |
+| context-management | セッション引き継ぎ（150K トークン付近で `/handover`）、ツール使用方針（並列実行・委譲基準）、サブエージェント同時 spawn 上限、deferred tools / ToolSearch |
+| memory | Auto Memory（構造化メモリ）の4種運用と crystallize との境界 |
 | plan-mode | Plan Mode の発動基準・ワークフロー・並列実装系スキルとの棲み分け |
 | document-writing | 人が読む文書（資料・議事録・PR説明・レポート）の構成原則、網羅より取捨選択、発見可能性の担保 |
 | file-operations | 破壊的操作の取扱い原則（コアエンジニア向け） |
@@ -101,7 +101,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 |---|---|
 | `check-debug-code.sh` | JS/TS の `console.log` / `debugger` 残存検出（検出時は stderr 警告 + exit 2、ブロックはしない）。警告は行番号のみで行内容は出さない |
 | `pre-commit-lint.sh` + `lint/` | `git commit` 時に多言語 lint を SRP 分離 dispatcher で実行（js/php/python/rust）。`lint/config.json` でプロジェクト別 override。lint 失敗時は deny でブロック。jq 不在・parse 失敗・作業ディレクトリ/git root/`lint/` 解決不能時は exit 2 で fail-closed |
-| `check-implementation-routing.sh` | コードファイル編集前に実装オーケストレーション系スキルの起動痕跡を確認し、無ければ reminder（blocking しない・macOS 前提） |
+| `check-implementation-routing.sh` | コードファイルの編集で git 作業ツリーの変更ファイル数が 5 / 10 / 15… に達し、直近 30 分に実装スキル（solo-with-verifier / orchestra-of-agents）の起動痕跡がないときだけ stderr に reminder（blocking しない・git 管理外では何もしない）。Claude のコンテキストには入らないなどの制約は hooks/README.md を参照 |
 
 ### ログ系
 
@@ -116,7 +116,8 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [docs/prompt-migration-guide.md](docs/prompt-migration-guide.md) | Opus 4.6 → 4.7 での挙動変化と、4.7 でプロンプト・スキル・ルールを書くときの実務ガイド。内容はこの特定バージョン移行に固有だが、次のモデル更新で既存資産を再調整する際の観点（挙動差の洗い出し・優先度判定・落とし穴）を先取りする参照テンプレートとして使える |
+| [docs/claude5-migration-guide.md](docs/claude5-migration-guide.md) | Opus 4.7 → Claude 5 系（Opus 5.5 / Fable 5.1 など）で変わった挙動と fstack での対応、これからスキル・ルールを書くときの推奨（effort の付け方・検証指示・スコープの除外指示） |
+| [docs/prompt-migration-guide.md](docs/prompt-migration-guide.md) | Opus 4.6 → 4.7 時点の記録。当時の挙動変化と、4.7 でプロンプト・スキル・ルールを書くときの実務ガイド。次のモデル更新で既存資産を再調整する際の観点（挙動差の洗い出し・優先度判定・落とし穴）の参照テンプレートとしても使える |
 
 ## カスタマイズ
 
