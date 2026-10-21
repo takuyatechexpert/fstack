@@ -4,6 +4,7 @@ description: 実装前の設計分析・アーキテクチャ評価を行う読�
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Agent
 model: inherit
+effort: high
 maxTurns: 30
 ---
 

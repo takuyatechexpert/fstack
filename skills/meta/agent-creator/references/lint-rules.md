@@ -19,6 +19,7 @@
 | W008 | 整合性 | WARN | `tools` と `disallowedTools` に同じツールが含まれている |
 | W009 | 構文 | WARN | description にクオートされていないコロンが含まれている |
 | W010 | 推奨 | WARN | `maxTurns` が未設定（安全装置なし） |
+| W011 | 値 | WARN | `effort` の値が無効 |
 | I001 | 情報 | INFO | 本文（システムプロンプト）が空 |
 | I002 | 情報 | INFO | `description` が短すぎる（50文字未満） |
 
@@ -29,7 +30,7 @@
 ```
 name, description, tools, disallowedTools, model, maxTurns,
 permissionMode, skills, mcpServers, memory, background,
-isolation, hooks
+isolation, hooks, effort
 ```
 
 これ以外のフィールドは Claude Code に**サイレントに無視される**。
@@ -71,10 +72,22 @@ Agent, Skill, NotebookEdit
 ### model
 
 ```
-haiku, sonnet, opus, inherit
+haiku, sonnet, opus, fable, inherit
 ```
 
-またはフルモデルID（例: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`）
+またはフルモデルID（例: `claude-opus-5-5`, `claude-fable-5-1`, `claude-sonnet-5-5`, `claude-haiku-5-5`）
+
+`opus[1m]` のような `[1m]` 付きエイリアスは**セッションのモデル設定**（`settings.json` の `model` / `/model`）専用で、エージェント frontmatter では使わない。
+
+### effort
+
+```
+low, medium, high, xhigh, max
+```
+
+左から低 → 高の順。整数は受け付けない（公式の指定値はレベル名のみ）。付けると、そのサブエージェントが動く間だけセッションの effort を上書きする（環境変数 `CLAUDE_CODE_EFFORT_LEVEL` は上書きしない）。
+
+省略時の挙動は公式ドキュメントに明記がない（スキルは「省略 = セッションの effort を引き継ぐ」と明記されている）。セッション既定もモデルで違い、Opus 5.5 / Sonnet 5.5 / Haiku 5.5 は `medium`、Fable 5.1 などその他は `high` なので、effort が品質やコストに効くエージェントは明示する。親が Opus 5.5（既定 `medium`）のとき `high` は effort を**上げる**指定になり、コストが増える。出典: [Sub-agents](https://code.claude.com/docs/en/sub-agents) / [Model configuration](https://code.claude.com/docs/en/model-config)
 
 ### permissionMode
 

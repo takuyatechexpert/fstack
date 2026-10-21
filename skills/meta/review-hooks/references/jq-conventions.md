@@ -48,5 +48,5 @@ echo '{"session_id":"test","prompt":"test"}' | /opt/homebrew/bin/jq -r '[(now | 
 ## SessionStart テスト入力
 
 ```bash
-echo '{"session_id":"test","source":"resume","model":"claude-opus-4-7"}' | /opt/homebrew/bin/jq -r '[(now | strftime("%Y-%m-%d %H:%M:%S")), (.source // ""), (.model // "")] | "[" + .[0] + "] [SESSION_START] source:" + .[1] + " model:" + .[2]'
+echo '{"session_id":"test","source":"resume","model":"claude-opus-5-5"}' | /opt/homebrew/bin/jq -r '[(now | strftime("%Y-%m-%d %H:%M:%S")), (.source // ""), (.model // "")] | "[" + .[0] + "] [SESSION_START] source:" + .[1] + " model:" + .[2]'
 ```

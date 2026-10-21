@@ -37,7 +37,7 @@ Claude Code カスタムエージェント（`.claude/agents/*.md`）の作成�
 | 1. 目的 | （必須） |
 | 2. スコープ | ユーザー / プロジェクト |
 | 3. ツール権限 | 読み取り専用 / 編集可 |
-| 4. モデル | 推論系（分析・レビュー・実装・オーケストレーション）は inherit（行を書かない） / 機械的処理（検索・単純分析・定型チェック）は `haiku` or `sonnet` 固定 / 評価系は固定維持。特定モデルのピン留めは最小限に。判断軸は `references/agent-patterns.md`「model 選定ポリシー」参照 |
+| 4. モデル | 推論系（分析・レビュー・実装・オーケストレーション）は inherit（行を書かない） / 機械的処理（検索・単純分析・定型チェック）は `haiku` or `sonnet` 固定 / `fable` は最難関の長時間タスクのみ（Opus より高コスト） / 評価系は固定維持。特定モデルのピン留めは最小限に。判断軸は `references/agent-patterns.md`「model 選定ポリシー」参照。`effort` は品質・コストに効くなら明示する（`references/lint-rules.md`「effort」） |
 | 5. `maxTurns` | 読み取り専用: 15 / 実装: 30 / オーケストレーター: 20 |
 | 6. 追加機能 | `memory` / `hooks` / `mcpServers` / `skills` の要否 |
 
@@ -67,7 +67,7 @@ Claude Code カスタムエージェント（`.claude/agents/*.md`）の作成�
 
 **設計の原則:**
 - description は意図しないトリガーを避けるため、「以下では起動しない」節で境界を示す
-- サブエージェントは別のサブエージェントを spawn できない（ネスト不可）
+- サブエージェントは既定で 3 層下まで孫を spawn できる（`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` で変えられ、`1` でネストしない）。fstack では孫を spawn させない（`rules/context-management.md`「サブエージェント同時 spawn 上限」）
 - 親のスキルは継承されない（必要なら `skills` フィールドで明示指定）
 
 ### Phase 3. バリデーション（リント）

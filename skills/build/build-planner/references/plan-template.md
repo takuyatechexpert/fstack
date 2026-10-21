@@ -77,7 +77,7 @@ build-planner の Phase 5 ルーブリックによる判定。
 | 依存関係 | {単純（直列・独立） / Wave設計が必要} |
 | 影響範囲 | {単一モジュール / 複数モジュール横断} |
 | 設計判断 | {既存パターンに沿う / アーキテクチャ選択を要する} |
-| **引き渡し先** | **{直接実装 / solo-with-verifier / orchestra-of-agents}** |
+| **引き渡し先** | **{単独実装 / solo-with-verifier / orchestra-of-agents}** |
 | 判定根拠 | {どの軸が決め手になったか} |
 
 ---

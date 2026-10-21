@@ -60,12 +60,15 @@ description: {日本語で機能説明 + トリガーフレーズ}
 - inherit にするとセッションのモデル（最上位含む）にそのまま追従する
 - **特定モデルのピン留めはリスク**: 指定モデルが利用プランで使えない場合、フォールバックせずエラーになる可能性がある。`fallbackModel` チェーンは可用性エラー専用で、無効モデル指定時の挙動は保証されない
 
-**effort:** セッションのデフォルト effort は高めのため、推論が軽くて済むスキルに `effort: high` を付けて下げる。
+**effort:** 省略するとセッションの effort を引き継ぐ。付けると、そのスキルが動く間だけセッションの effort を上書きする。セッション既定はモデルで違い、Opus 5.5 / Sonnet 5.5 / Haiku 5.5 は `medium`、Fable 5.1 などその他は `high`（[Model configuration](https://code.claude.com/docs/en/model-config)）。Opus 5.5 のセッションで `effort: high` を付けると、下げるのではなく**上げる**指定になる。
 
-- **付けない（デフォルト維持）**: 深い多段推論が品質に直結するもの（推論系と同じ顔ぶれ）
-- **`effort: high`**: 定型ワークフロー・UI 自動操作・情報取得＆表示・投稿・申請（例: handover）
-- **制約**: effort はモデル依存。`model: haiku` 指定スキルには付けない（モデルで軽量化済み）。`model: sonnet` は実質 high が上限のため付与しても挙動はほぼ変わらない。実質的に効くのは inherit / 上位モデル指定のうち軽いもの
-- **書式**: フロントマター閉じ `---` の直前、`model:` があればその下に 1 行 `effort: high`
+- **省略（セッション既定に追従）**: 推論系（上の model の推論系と同じ顔ぶれ）
+- **定型処理は model を先に軽くする**: `model: haiku` / `model: sonnet` の固定で足りるので effort は原則省略する。inherit のまま effort だけ下げたいなら、セッションのモデルの既定より低いレベルを明示する（Fable 5.1 なら `medium`、Opus 5.5 なら `low`。`low` は取得を伴わない単純作業に限る）
+- **`xhigh` / `max`**: eval で品質向上を測れたスキルだけに付ける。Opus 5.5 は同じレベルでも前世代より 1 ターンに多く考え、Fable 5.1 は長い成果物を思考内で下書きしがちで、品質より先にコストと待ち時間が増える
+- **`low`**: 取得（Web・API・リポジトリ検索）を伴わない単純作業に限る。Fable 5.1 は `low` で検索・取得ツールを呼ぶ頻度が下がり、記憶で答えやすくなる
+- **thinking をオフにする設定・「考えるな」系の指示は書かない**: Opus 5.5 / Sonnet 5.5 / Haiku 5.5 / Fable 系は Claude Code で thinking を切れない。コストは effort で制御する（多くのタスクで thinking オン + 低 effort が thinking オフを同コストで上回る）
+- **サブエージェントとは扱いが違う**: サブエージェントは effort 省略時の挙動が公式に明記されていないため、品質・コストに効くものは明示する（agent-creator の `references/lint-rules.md`「effort」）
+- **書式**: フロントマター閉じ `---` の直前、`model:` があればその下に 1 行（例: `effort: medium`）。有効値は `low` / `medium` / `high` / `xhigh` / `max`
 
 ### 本文（Markdown）
 

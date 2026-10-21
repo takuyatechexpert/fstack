@@ -1,6 +1,6 @@
 ---
 name: solo-with-verifier
-description: "Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、1〜3ファイル・1〜3タスクの小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。**MUST: Edit/Write/NotebookEdit を伴う実装系の依頼を受けたら、typo・1行修正・コメント変更のみの極小スコープ以外はすべて本スキルを起動すること。「コピペ流用だから」「他リポジトリの実装をなぞるだけだから」「自分でやった方が早い」のような理由で直接実装に逃げない。** ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったとき、またはコード変更を伴う依頼を受けたときに使用する。以下では起動しない: 5タスク以上・複数モジュール横断の中〜大規模実装（orchestra-of-agents）、実装着手前の設計・計画書化のみ（build-planner）、typo/1行修正/コメント変更のみの極小スコープ、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
+description: "Generator-Verifier パターンによる軽量実装スキル。Implementer（実装＋テスト）と Verifier（仕様適合・テスト品質・rules遵守・検証コマンド）の2エージェントを最大3反復させ、小〜中規模修正で実装の正しさ・テスト網羅性・クリーンコードを担保する。orchestra-of-agents の軽量版。起動の目安: 1〜3ファイル・1〜3タスクで、仕様が曖昧・影響範囲が読めない・取りこぼしのコストが高い場合。スコープが明確な小〜中規模修正は単独実装で足りる（判断基準は rules/implementation-flow.md）。ユーザーが「修正して」「直して」「追加して」「実装して」「リファクタして」「ペアプロモードで」「solo-with-verifier」と言ったときに使用する。以下では起動しない: 5タスク以上・複数モジュール横断の中〜大規模実装（orchestra-of-agents）、実装着手前の設計・計画書化のみ（build-planner）、スコープが明確で影響範囲が読める小〜中規模修正（単独実装と rules/testing.md の検証コマンドで足りる）、typo/1行修正/コメント変更のみの極小スコープ、PRレビュー単発（review-pr）、テスト単発（spec-driven-test）。"
 ---
 
 # solo-with-verifier
@@ -13,10 +13,10 @@ Implementer と Verifier の2エージェントを反復させ、小〜中規模
 | スキル | スコープ | レビュー体制 |
 |---|---|---|
 | `orchestra-of-agents`（既存） | 5タスク以上の中〜大規模 | クロスレビュー＋横断レビュー |
-| **`solo-with-verifier`（本スキル）** | 1〜3タスクの小〜中規模 | Verifier 1名（4観点） |
-| 直接実装 | typo 1行修正など | なし（品質保証なし） |
+| **`solo-with-verifier`（本スキル）** | 1〜3タスクの小〜中規模で、仕様が曖昧・影響範囲が読めない・取りこぼしのコストが高いもの | Verifier 1名（4観点） |
+| 単独実装 | スコープが明確な小〜中規模、typo・1 行修正 | `rules/testing.md`「検証手段」のコマンド実行 |
 
-**原則として直接実装は避け、本スキルか orchestra-of-agents のどちらかを必ず通す。**
+**本スキルは常時通すものではない。起動判断は `rules/implementation-flow.md`「検証体制を足す判断」に従う。**
 
 ## 参照ファイル（毎回 Read で読み込む）
 

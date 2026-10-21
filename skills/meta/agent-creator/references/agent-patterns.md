@@ -155,7 +155,7 @@ maxTurns: 20
 
 **注意:**
 - `Agent()` 構文でサブエージェントを制限する
-- サブエージェントはさらにサブエージェントを spawn できない（ネスト不可）
+- サブエージェントは既定で 3 層下まで孫を spawn できる（`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` で変えられ、`1` でネストしない）。fstack では孫を spawn させない（`rules/context-management.md`「サブエージェント同時 spawn 上限」）。spawn 先を絞るなら上の `Agent()` 構文を使う
 - `--agent {name}` で実行した場合のみ有効
 
 ---
@@ -268,7 +268,8 @@ memory: project
 |-----------|-----|-----------|------|
 | `tools` | string/array | 親から継承 | 許可ツールリスト |
 | `disallowedTools` | string/array | なし | 禁止ツールリスト（`tools` より優先） |
-| `model` | string | `inherit` | `haiku` / `sonnet` / `opus` / フルID。判断軸は下記「model 選定ポリシー」参照 |
+| `model` | string | `inherit` | `haiku` / `sonnet` / `opus` / `fable` / フルID。判断軸は下記「model 選定ポリシー」参照 |
+| `effort` | string | 公式に明記なし | `low` / `medium` / `high` / `xhigh` / `max`。省略時の挙動が公式に明記されていないため、品質・コストに効くエージェントは明示する（親が Opus 5.5 なら `high` は上げる指定。詳細は `lint-rules.md`「effort」） |
 | `maxTurns` | integer | 無制限 | 最大ターン数（安全装置として設定推奨） |
 | `permissionMode` | string | 親から継承 | `default` / `acceptEdits` / `dontAsk` / `bypassPermissions` / `plan` |
 | `skills` | array | なし | プリロードするスキル名（親から継承されない） |
@@ -285,6 +286,7 @@ memory: project
 - **推論系は inherit（model 行を書かない or `model: inherit`）**: 分析系・レビュー系・実装系・オーケストレーションなど深い推論が品質に直結するもの。セッションのモデル（最上位含む）に追従する。軽量・定型的な実装に限るなら `sonnet` 固定も可
 - **機械的処理は haiku/sonnet 固定**: 静的解析・依存確認・定型チェックなど。上位モデルはオーバースペック
 - **採点・評価系はモデル固定を維持**: ベンチマーク比較可能性のため。採点者のモデルを変えると過去結果と比較できなくなる
+- **`fable` は最難関の長時間タスクに限る**: Opus より高コスト。固定した場合のリスクは下記「ピン留めのリスク」と同じ
 
 上のパターン例の `model` 値は具体的なデフォルトとして置いている（A/B/C は inherit、D は haiku、E は sonnet）。要件に応じて読み替えてよい。
 

@@ -3,6 +3,7 @@ name: db-schema-investigator
 description: "DBスキーマを調査して確定する読み取り専用エージェント。テーブル定義・カラムの型/桁/制約/NULL可否/外部キーを、create だけでなく後続 change まで追い実DBで裏取りし、file:line 付きで報告する。スキーマの事実確認で使う。以下では起動しない、スキーマ新規設計、マイグレーション作成、コード変更、設計相談、スキーマ無関係なコード探索。"
 disallowedTools: Write, Edit, NotebookEdit, Agent
 model: inherit
+effort: medium
 maxTurns: 30
 ---
 

@@ -20,7 +20,7 @@ from pathlib import Path
 VALID_FIELDS = {
     "name", "description", "tools", "disallowedTools", "model", "maxTurns",
     "permissionMode", "skills", "mcpServers", "memory", "background",
-    "isolation", "hooks",
+    "isolation", "hooks", "effort",
 }
 
 COMMON_TYPOS = {
@@ -37,8 +37,11 @@ COMMON_TYPOS = {
     "maxturns": "maxTurns",
 }
 
-VALID_MODELS = {"haiku", "sonnet", "opus", "inherit"}
+VALID_MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
 MODEL_ID_PATTERN = re.compile(r"^claude-[\w-]+-\d")
+
+# 低 → 高の順。公式の options はレベル名のみなので整数は受け付けない
+VALID_EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"]
 
 VALID_PERMISSION_MODES = {"default", "acceptEdits", "dontAsk", "bypassPermissions", "plan"}
 
@@ -197,6 +200,12 @@ def lint(filepath: str) -> list[Issue]:
         issues.append(Issue("W004", "WARN",
             f"`memory` の値 `{memory}` は無効です "
             f"(有効値: {', '.join(sorted(VALID_MEMORY_SCOPES))})"))
+
+    effort = fields.get("effort", "")
+    if effort and effort not in VALID_EFFORT_LEVELS:
+        issues.append(Issue("W011", "WARN",
+            f"`effort` の値 `{effort}` は無効です "
+            f"(有効値: {', '.join(VALID_EFFORT_LEVELS)})"))
 
     # Phase 6: maxTurns の型チェック
     max_turns = fields.get("maxTurns", "")
