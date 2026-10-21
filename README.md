@@ -27,7 +27,7 @@ setup スクリプトは fstack から `~/.claude/` へシンボリックリン�
 |---------|--------|------|---------|
 | Core | handover | セッション引き継ぎ。コンテキスト劣化を防ぎ、次セッションへスムーズに移行 | `/handover` |
 | Core | crystallize | ナレッジ蒸留。ログとメモリを分析し、繰り返すパターンを知識に昇華 | `/crystallize` |
-| Review | review-pr | PR レビュー。git worktree でブランチ全体を読み込み、プロジェクト方針に基づくフルレビュー | `/review-pr` |
+| Review | review-pr | PR レビュー。git worktree でブランチ全体を読み込み、PR 内容に応じた観点別サブエージェントの並列レビューと偽陽性チェックを経て、変更漏れ・影響範囲まで確認 | `/review-pr` |
 | Review | pending-reviews | レビュー待ち PR の一覧取得 | `/pending-reviews` |
 | Review | review-all-pending | レビュー待ち PR を並列で一括レビュー、結果を `reviews/` に出力 | `/review-all-pending` |
 | Test | spec-driven-test | 仕様駆動テスト。対象の仕様分析 → テストケース設計 → 実装 | `/spec-driven-test` |

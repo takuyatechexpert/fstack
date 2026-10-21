@@ -1,0 +1,89 @@
+{
+  "skill_name": "review-pr",
+  "evals": [
+    {
+      "id": 1,
+      "name": "standard_pr_number",
+      "prompt": "PR #1234 のレビューお願いします",
+      "expected_mode": "standard",
+      "files": [],
+      "expectations": [
+        "標準モード（マルチエージェント）として処理されている",
+        "git worktree add がリポジトリ内 .worktrees/review-pr-1234 に対して親により1回実行されている（/tmp 配下ではない）",
+        "Phase 4-1 で worker 選定が PR 内容（差分の性質）に基づいて行われている（規模＝ファイル数・行数を選定理由にしていない）",
+        "Phase 4-2 で選定された worker サブエージェントが同一ターン内で並列 spawn されている（Agent ツール呼び出しが1メッセージ内に複数）",
+        "仕様ソース（リンク Issue・PR 説明の要求記述）が存在する場合、仕様適合 worker（spec-compliance-check.md を読む worker5）が起動されている",
+        "出力の概要に worker 選定行（起動 worker / スキップ worker + 理由）が含まれる（silent skip がない）",
+        "Phase 5 で偽陽性チェック担当（verifier）が1体 spawn され、worker の指摘を裏取りしている",
+        "最終出力の指摘は verifier が confirmed/downgraded とした指摘のみで構成されている（rejected が出力に混入していない）",
+        "worker / verifier に渡されているのは参照ファイルの絶対パスであり要約ではない",
+        "review-codex スキルへの委譲記録がない（負アサーション）",
+        "出力に `## PRレビュー: #1234` 見出しが含まれる",
+        "出力に `### 指摘事項` セクションが含まれる",
+        "出力に `### 良い点` セクションが含まれる",
+        "出力に `### 総評` セクションが含まれ、偽陽性チェック結果（裏取り/棄却件数）に1行触れている",
+        "MUST/SHOULD/NITS/QUESTION のいずれかが最低1件含まれる",
+        "ファイル指摘の行番号フォーマットが path:line（例: app/Foo.php:42）になっている",
+        "クリーンアップで git worktree remove が呼ばれている"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "codex_delegation",
+      "prompt": "/review-pr codex #1234 のレビューお願いします",
+      "expected_mode": "codex",
+      "files": [],
+      "expectations": [
+        "codex 委譲モードとして処理されている",
+        "Skill ツールで review-codex が呼び出されている",
+        "git worktree add が実行されていない（負アサーション）",
+        "review-codex への引数から先頭の `codex` が除去されている",
+        "ユーザーへの通知に「Codex にレビューを委譲」相当のメッセージがある（特定バージョン gpt-5.4 の表記が残っていない）",
+        "本スキル側で再加工した PR レビュー出力が**生成されていない**（review-codex 出力をそのまま提示）"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "multiple_pr_parallel",
+      "prompt": "PR #100 と PR #101 を両方レビューしてください",
+      "expected_mode": "standard_batch",
+      "files": [],
+      "expectations": [
+        "標準モードとして処理されている",
+        "PR #100 と #101 それぞれにサブエージェントが起動されている",
+        "サブエージェント spawn が同一ターン内で並列に発行されている（複数の Agent ツール呼び出しが1メッセージ内）",
+        "各サブエージェントは Phase 1〜7 を単独で実行する指示を受けている（PR 内で worker 群 + verifier を再展開していない＝エージェント爆発の回避）",
+        "各サブエージェントには参照ファイルの絶対パスが渡されている（要約ではない）",
+        "出力に PR #100 と PR #101 の両方のレビュー結果が含まれる"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "github_pr_url",
+      "prompt": "https://github.com/owner/repo/pull/567 のレビューお願いします",
+      "expected_mode": "standard",
+      "files": [],
+      "expectations": [
+        "標準モードとして処理されている",
+        "URL から owner/repo/PR番号が抽出されている（owner=owner, repo=repo, num=567）",
+        "git remote get-url origin の呼び出しが**ない**（URL に owner/repo 情報があるため不要）",
+        "Phase 1 で mcp__github__pull_request_read が呼ばれている",
+        "出力に `## PRレビュー: #567` 見出しが含まれる"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "codex_with_focus",
+      "prompt": "/review-pr codex このPRのセキュリティ観点だけCodexに見てもらって #890",
+      "expected_mode": "codex",
+      "files": [],
+      "expectations": [
+        "codex 委譲モードとして処理されている",
+        "review-codex に渡される依頼本文に「セキュリティ観点」相当の文言が保持されている",
+        "review-codex に渡される依頼本文から先頭 `codex` が除去されている",
+        "PR 番号 #890 が依頼本文に保持されている",
+        "本スキル側で worktree 作成が**行われていない**（負アサーション）"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,10 @@ fstack/
 │   │       └── scripts/      # verify-integrity.sh
 │   ├── review/
 │   │   ├── review-pr/
-│   │   │   └── SKILL.md   # PR レビュースキル
+│   │   │   ├── SKILL.md   # PR レビュースキル
+│   │   │   ├── references/   # worker 起動仕様・技術スタック別チェックリスト・出力フォーマット
+│   │   │   ├── evals/
+│   │   │   └── design/       # check_structure.py（references の構造整合性チェック）
 │   │   ├── pending-reviews/
 │   │   │   └── SKILL.md   # レビュー待ち一覧スキル
 │   │   └── review-all-pending/

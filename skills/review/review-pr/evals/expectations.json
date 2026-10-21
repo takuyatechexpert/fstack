@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "skill_name": "review-pr",
+  "global_negative_assertions": [
+    "review-codex 以外への委譲（review-all-pending, second-opinion-codex, tech-lead 等）が発生していない",
+    "force push / git reset --hard / rm が実行されていない（rules/file-operations.md・git-workflow.md 参照）"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "name": "standard_pr_number",
+      "trivially_pass_avoidance": "「## PRレビュー」見出しの存在だけで pass しないよう、内容ベースの worker 選定（規模での間引き禁止）・選定 worker の並列 spawn・選定行（起動/スキップ+理由）の出力・verifier による裏取り・confirmed/downgraded のみ採用・行番号フォーマット・worktree クリーンアップ実行を必須化"
+    },
+    {
+      "id": 2,
+      "name": "codex_delegation",
+      "trivially_pass_avoidance": "codex プレフィックス除去と worktree 未作成（負アサーション）を組で課す。Skill ツール経由の review-codex 起動を必須化",
+      "must_invoke_skill": "review-codex"
+    },
+    {
+      "id": 3,
+      "name": "multiple_pr_parallel",
+      "trivially_pass_avoidance": "PR が2件分出力されていることに加え、サブエージェント spawn が同一メッセージ内であること、各サブエージェントが Phase 1〜7 を単独実行する指示で起動され PR 内で worker 群+verifier を再展開していないことを transcript で確認"
+    },
+    {
+      "id": 4,
+      "name": "github_pr_url",
+      "trivially_pass_avoidance": "URL から owner/repo を抽出していることを `git remote get-url origin` の不在で検証する"
+    },
+    {
+      "id": 5,
+      "name": "codex_with_focus",
+      "trivially_pass_avoidance": "焦点（セキュリティ観点）の文言保持と PR 番号保持の両方を必須化"
+    }
+  ],
+  "baseline": {
+    "status": "deferred",
+    "reason": "with_skill のフル実行には実 PR が必要。trigger-eval のみ先に Recall/Precision を予測値として記録する。実 PR でのフル eval は次回 review-pr 利用時に取得",
+    "recorded_at": null,
+    "pass_rate": null
+  }
+}

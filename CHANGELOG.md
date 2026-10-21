@@ -31,6 +31,7 @@
 - コンテキスト管理の基準を変えました。`/handover` の目安をコンテキスト使用率 65% から 150K トークン付近（200K トークンに到達させない）に変え、サブエージェント委譲の判断基準を「価値が明確なときだけ」に差し替えて同時 spawn 上限を加えました。handover の引き継ぎ文書には「試して捨てた案」の節と、ユーザーの決定・制約を発言に近い形で残す指示を足しました。
 - effort の付け方の基準（`skill-standards.md`）を、モデルごとに既定値が違う前提（Opus 5.5 は `medium`、Fable 5.1 は `high`）で書き直しました。エージェント lint は `effort` フィールドと `fable` モデルを受け付け、無効な `effort` の値を W011（WARN）で知らせます。`architect` に `effort: high`、`db-schema-investigator` に `effort: medium` を明示しました。
 - `rules/document-writing.md` に、書式の使い所・言葉どおりに書く・長さをタスクに見合わせる、の原則を足しました。あわせて rules にあった特定モデル（Opus 4.7）を前提にした書き方を、Claude Code の機能としての書き方に直しました。
+- review-pr を、PR 内容に応じて選ぶ観点別 worker（最大 8 種）の並列レビューと、verifier による偽陽性チェックの構成に刷新しました。worktree はリポジトリ内の `.worktrees/` に作り、マージ済み PR・submodule・base より遅れたブランチへの対処を加えました。Laravel/DDD・React/Next.js・Flutter・IaC・設計書・試験ドキュメント別のチェックリストを `references/` に分け、`codex` 委譲モード（別途 `review-codex` スキルが必要）を追加しました。
 
 ### Fixed
 
