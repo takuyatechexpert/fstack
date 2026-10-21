@@ -2,7 +2,7 @@
 
 ## 概要
 
-Claude Opus 4.7 で `EnterPlanMode` / `ExitPlanMode` が標準提供される。
+Claude Code の標準機能として `EnterPlanMode` / `ExitPlanMode` が提供される。
 Plan Mode は **編集・コマンド実行を抑制し、計画立案に集中する思考フェーズの仕組み**。
 読み取り・調査ツールのみ使える状態にすることで、実装に踏み込む前の意図合わせを徹底する。
 
