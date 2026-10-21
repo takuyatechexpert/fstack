@@ -32,7 +32,7 @@
 |---|---|---|
 | `check-debug-code.sh` | `PostToolUse` (Edit/Write) | JS/TS の `console.log` / `debugger` 残存検出。検出時は stderr に警告 + exit 2 で Claude に通知（ブロックはしない）。警告は `WARNING: debug code found in <file> (lines: 3, 7)` の形式で、行番号のみを出し**マッチした行の内容は出さない** |
 | `pre-commit-lint.sh` + `lint/` | `PreToolUse` (Bash) | `git commit` 時に多言語 lint を dispatcher で実行。`lint/lint-{js,php,python,rust}.sh` の SRP 分離 + `lint/config.json` でプロジェクト別 override。lint 失敗時は `permissionDecision: "deny"` + exit 0 でコミットをブロック。symlink 経由で起動しても POSIX ポータブルな追跡ループで実体位置から `lint/` を解決する。作業起点は check-secret-patterns と同様に `cd <path> &&` / `git -C <path>` を解釈する。jq 不在・parse 失敗・**作業ディレクトリ/git root が解決できない場合**・**symlink 実体解決に失敗して `lint/` が見つからない場合**はいずれも exit 2 で fail-closed（サイレント no-op・exit 0 素通りは廃止） |
-| `check-implementation-routing.sh` | `PreToolUse` (Edit/Write/NotebookEdit) | コードファイル編集前に、直近30分以内に実装オーケストレーション系スキル（solo-with-verifier / orchestra-of-agents）の起動痕跡が `skills.log` にあるか確認し、無ければ stderr で reminder（blocking しない）。メタ系・設定系・ドキュメント系のパスは除外 |
+| `check-implementation-routing.sh` | `PreToolUse` (Edit/Write/NotebookEdit) | コードファイルの編集で git 作業ツリーの変更ファイル数が 5 / 10 / 15… に達し、かつ直近30分以内に実装スキル（solo-with-verifier / orchestra-of-agents）の起動痕跡が `skills.log` に無いときだけ、影響範囲が広がった可能性を stderr で reminder（blocking しない）。既に変更済みのファイルの再編集・git 管理外・メタ系・設定系・ドキュメント系のパスでは何もしない |
 
 ### ログ系
 
@@ -216,10 +216,16 @@ INTERNAL_API_[A-Z0-9]{20,}
 
 ## check-implementation-routing.sh の注意点
 
+- 判定は git 作業ツリーの実測値で行うため、payload の `cwd` が必要。`cwd` が無い・ディレクトリでない・git 管理外・git が PATH に無いときは何もせず正常終了する
+- 編集対象は `tool_input.file_path`（NotebookEdit は `tool_input.notebook_path`）。相対パスは `cwd` 基準で解決する。git にはパスを literal として渡すため（`status --literal-pathspecs`）、`[id].tsx` や `*` を含む名前が glob として別のファイルに一致することはない
+- 変更ファイル数は `git diff --name-only HEAD`（追跡済みの変更）と `git ls-files --others --exclude-standard`（未追跡）の和集合で、NUL 区切りで数える（空白や改行を含む名前も 1 件）。編集対象が既に変更済み・未追跡・ignore 対象・リポジトリ外なら件数は増えないので出さない。編集後の件数が 5 の倍数に達した編集の 1 回だけ出す（状態ファイルは持たない）
+- hook から呼ぶ git はすべて `--no-optional-locks` を付け、ユーザーの git 操作と `index.lock` を取り合わない
 - skills.log のタイムスタンプ→epoch 変換は lib（`date -j -f` / `date -d` を feature-detect）が吸収するため macOS / Linux 双方で動く
 - 遡る時間窓は `FSTACK_ROUTING_WINDOW_SEC`（既定 1800 秒 = 30分）で調整できる
 - `skills.log` が存在しない環境では何もせず正常終了する（reminder を出すには `skill-log.sh` 等でスキル起動を記録している前提）
-- 非ブロッキング advisory。lib/jq 解決失敗時は reminder を諦めて `exit 0` で継続する（極小スコープの編集でも無視して続行可能）
+- 非ブロッキング advisory。すべての経路で `exit 0`。lib/jq 解決失敗時は reminder を諦めて継続する
+- 現状は `exit 0` の stderr で出すため、reminder は Claude のコンテキストには入らない（[公式 hooks ドキュメント](https://code.claude.com/docs/en/hooks)）。Claude に渡すには `hookSpecificOutput.additionalContext` で返す必要があり、今後の課題
+- 状態を持たないので、5 の倍数をまたぐ変更が除外パスの編集や Bash によるファイル生成で起きた回は出ず、次の倍数に達するまで出ない
 
 ## log-knowledge-read.sh の注意点
 
